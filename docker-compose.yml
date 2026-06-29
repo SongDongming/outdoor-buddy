@@ -1,0 +1,109 @@
+services:
+  app:
+    build: .
+    container_name: outdoor-buddy-app
+    ports:
+      - "${APP_PORT:-8001}:8001"
+    environment:
+      - DB_HOST=db
+      - DB_PORT=5432
+      - DB_USER=postgres
+      - DB_PASSWORD=${DB_PASSWORD:-outdoor_buddy_pg}
+      - DB_NAME=outdoor_assistant
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-local}
+      - STORAGE_LOCAL_DIR=app/static/img
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_SECURE=false
+      - MINIO_EXTERNAL_URL=http://localhost:9000
+      - MINIO_BUCKETS=avatars,uploads
+      - COMPATIBLE_API_KEY=${COMPATIBLE_API_KEY}
+      - COMPATIBLE_BASE_URL=${COMPATIBLE_BASE_URL:-https://api.deepseek.com/v1}
+      - COMPATIBLE_MODEL=${COMPATIBLE_MODEL:-deepseek-v4-flash}
+      - HTTP_PROXY=${HTTP_PROXY:-}
+      - HTTPS_PROXY=${HTTPS_PROXY:-}
+      - NO_PROXY=${NO_PROXY:-}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=1440
+      - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
+      # SMTP 邮件配置（用于密码重置邮件发送，在 .env 中配置）
+      - SMTP_HOST=${SMTP_HOST}
+      - SMTP_PORT=${SMTP_PORT}
+      - SMTP_USER=${SMTP_USER}
+      - SMTP_PASSWORD=${SMTP_PASSWORD}
+      - SMTP_FROM=${SMTP_FROM}
+      - SMTP_USE_TLS=${SMTP_USE_TLS}
+    volumes:
+      - storage_data:/app/data/storage
+      - ./logs:/app/logs
+      # 开发模式：挂载代码目录，修改即时生效（无需重建镜像）
+      - ./app/static:/app/app/static
+      - ./app/agents:/app/app/agents
+      - ./app/api:/app/app/api
+      - ./app/core:/app/app/core
+      - ./app/utils:/app/app/utils
+      - ./app/services:/app/app/services
+      - ./app/models:/app/app/models
+      - ./app/schemas:/app/app/schemas
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  db:
+    image: postgres:16-alpine
+    container_name: outdoor-buddy-db
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=${DB_PASSWORD:-outdoor_buddy_pg}
+      - POSTGRES_DB=outdoor_assistant
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d outdoor_assistant"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    image: minio/minio:latest
+    container_name: outdoor-buddy-minio
+    command: server /data --console-address ":9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    volumes:
+      - minio_data:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: 1400
+
+volumes:
+  storage_data:
+    driver: local
+  pg_data:
+    driver: local
+  minio_data:
+    driver: local

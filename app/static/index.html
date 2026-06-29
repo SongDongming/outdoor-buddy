@@ -1,0 +1,927 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Outdoor Buddy — 户外徒步助手</title>
+<link rel="stylesheet" href="/static/css/style.css?v=3.3">
+<script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
+</head>
+<body x-data="app" x-init="init()">
+
+<!-- ====== SIDEBAR ====== -->
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <div class="logo">
+      <svg viewBox="0 0 24 24" width="28" height="28"><path d="M12 2L2 22h6l4-8 4 8h6L12 2z" fill="currentColor"/></svg>
+      Outdoor Buddy
+    </div>
+    <div class="subtitle">LangGraph Multi-Agent</div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">核心功能</div>
+    <button class="nav-item" :class="{active:page==='home'}" @click="navigate('home')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+      </span> <span>发现</span>
+    </button>
+    <button class="nav-item" :class="{active:page==='route'}" @click="navigate('route')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+      </span> <span>路线查询</span>
+      <span class="nav-badge" x-show="routeResults?.routes?.length" x-text="routeResults.routes.length" style="font-size:.6rem;min-width:18px;text-align:center"></span>
+    </button>
+    <button class="nav-item" :class="{active:page==='equipment'}" @click="navigate('equipment')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+      </span> <span>装备推荐</span>
+      <span class="nav-badge" x-show="equipResults" style="background:var(--teal);font-size:.6rem;min-width:8px;width:8px;height:8px;padding:0;border-radius:50%"></span>
+    </button>
+    <div class="nav-section">社区</div>
+    <button class="nav-item" :class="{active:page==='forum'}" @click="navigate('forum')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+      </span> <span>论坛</span>
+    </button>
+    <div class="nav-section">出行服务</div>
+    <button class="nav-item" :class="{active:page==='ticket'}" @click="navigate('ticket')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="22" height="12" rx="2"/><path d="M1 9h22"/><path d="M7 21h10"/><path d="M12 15v6"/></svg>
+      </span> <span>交通票务</span>
+    </button>
+    <button class="nav-item" :class="{active:page==='weather'}" @click="navigate('weather')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/></svg>
+      </span> <span>天气查询</span>
+    </button>
+    <button class="nav-item" :class="{active:page==='plan'}" @click="navigate('plan')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+      </span> <span>行程预案</span>
+    </button>
+    <button class="nav-item" :class="{active:page==='qa'}" @click="navigate('qa')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+      </span> <span>智能问答</span>
+    </button>
+    <div class="nav-section">账户</div>
+    <button class="nav-item" :class="{active:page==='profile'}" @click="navigate('profile')">
+      <span class="nav-icon">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      </span> <span>个人中心</span>
+      <span class="nav-badge" x-show="favorites.length" x-text="favorites.length" style="font-size:.6rem;min-width:18px;text-align:center"></span>
+    </button>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div x-show="user" x-transition.opacity>
+      <div class="user-info">
+        <div class="user-avatar" :style="user.avatar_url ? 'background-image:url('+user.avatar_url+');background-size:cover;background-position:center' : ''" x-text="user.avatar_url ? '' : user.username[0]?.toUpperCase()"></div>
+        <div><div style="font-weight:500" x-text="user.username"></div>
+        <div style="font-size:.7rem;color:var(--sage);cursor:pointer" @click="logout">退出</div></div>
+      </div>
+    </div>
+    <div x-show="!user" x-transition.opacity>
+      <button class="btn btn-amber btn-block btn-sm" @click="toggleAuth()">登录 / 注册</button>
+    </div>
+  </div>
+</aside>
+
+<!-- ====== MAIN CONTENT ====== -->
+<main class="main-content">
+
+  <!-- ====== HOME PAGE ====== -->
+  <div x-show="page==='home'" x-transition>
+    <div class="hero hero-enhanced">
+      <canvas class="hero-canvas" id="heroCanvas"></canvas>
+      <div class="hero-content">
+        <h1>探索户外的<br><span>无限可能</span></h1>
+        <p>基于 LangGraph 多智能体架构，7 个 AI Agent 协同工作，一站式聚合路线、装备、天气、票务与行程规划</p>
+        <div class="hero-stats">
+          <div class="hero-stat"><span class="hs-val">7</span><span class="hs-label">AI Agents</span></div>
+          <div class="hero-stat"><span class="hs-val">6</span><span class="hs-label">核心模块</span></div>
+          <div class="hero-stat"><span class="hs-val">24h</span><span class="hs-label">智能缓存</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-section" style="margin-top:32px">
+      <h2>智能模块</h2>
+      <div class="feature-grid">
+        <div class="feature-card" @click="navigate('route')">
+          <span class="fc-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+          </span><div class="fc-title">路线查询</div>
+          <div class="fc-desc">LangGraph RouteAgent 智能搜索全国热门徒步路线</div>
+          <div style="margin-top:10px"><span class="tech-badge">RouteAgent</span></div>
+        </div>
+        <div class="feature-card" @click="navigate('equipment')">
+          <span class="fc-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7h-9"/><path d="M14 17H5"/><circle cx="17" cy="17" r="3"/><circle cx="7" cy="7" r="3"/></svg>
+          </span><div class="fc-title">装备推荐</div>
+          <div class="fc-desc">EquipmentAgent 基于路线参数自动匹配装备方案</div>
+          <div style="margin-top:10px"><span class="tech-badge">EquipmentAgent</span></div>
+        </div>
+        <div class="feature-card" @click="navigate('qa')">
+          <span class="fc-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--ice)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          </span><div class="fc-title">智能问答</div>
+          <div class="fc-desc">QAAgent 覆盖野外生存、急救、天气、LNT、装备五大领域</div>
+          <div style="margin-top:10px"><span class="tech-badge">QAAgent</span></div>
+        </div>
+        <div class="feature-card" @click="navigate('weather')">
+          <span class="fc-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--ice)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/></svg>
+          </span><div class="fc-title">天气查询</div>
+          <div class="fc-desc">WeatherAgent 对接 MCP 实时气象服务，7天预报+出行评估</div>
+          <div style="margin-top:10px"><span class="tech-badge">WeatherAgent</span></div>
+        </div>
+        <div class="feature-card" @click="navigate('ticket')">
+          <span class="fc-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--teal)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="22" height="12" rx="2"/><path d="M1 9h22"/><path d="M7 21h10"/><path d="M12 15v6"/></svg>
+          </span><div class="fc-title">交通票务</div>
+          <div class="fc-desc">TicketAgent 对接 12306 MCP 服务，实时查询车次</div>
+          <div style="margin-top:10px"><span class="tech-badge">TicketAgent</span></div>
+        </div>
+        <div class="feature-card" @click="navigate('plan')">
+          <span class="fc-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--aurora)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+          </span><div class="fc-title">行程预案</div>
+          <div class="fc-desc">PlanAgent 五维参数整合，输出逐日行动指南</div>
+          <div style="margin-top:10px"><span class="tech-badge">PlanAgent</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="feature-section" x-show="history.length">
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h2>最近查询</h2>
+        <button class="btn btn-ghost btn-sm" @click="clearAllHistory()">清除全部</button>
+      </div>
+      <div class="card" style="padding:8px">
+        <template x-for="h in history.slice(0,8)" :key="h.time + h.title">
+          <div class="history-item" @click="h.type==='route' ? restoreRoute(h) : navigate(h.type==='qa'?'qa':h.type)">
+            <span class="hi-icon" x-text="historyIcon(h.type)"></span>
+            <div><div style="font-weight:500" x-text="h.title"></div>
+            <div style="font-size:.7rem;color:var(--sage)" x-text="h.summary"></div></div>
+            <span class="hi-time" x-text="formatTime(h.time)"></span>
+          </div>
+        </template>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== ROUTE PAGE ====== -->
+  <div x-show="page==='route'" x-transition>
+    <div class="page-header">
+      <h2>路线查询</h2>
+      <div x-show="routeResults" style="font-size:.78rem;color:var(--sage)">上次结果已保留</div>
+    </div>
+    <div style="padding:0 40px">
+      <div style="display:flex;gap:10px;max-width:500px;margin-bottom:16px">
+        <input class="form-input" placeholder="搜索徒步路线..." x-model="routeKeyword" @keydown.enter="searchRoute()" maxlength="100"
+               x-effect="page==='route' && $nextTick(() => $el.focus())">
+        <button class="btn btn-primary" @click="searchRoute()" :disabled="inFlight.searchRoute">搜索</button>
+      </div>
+      <div class="chip-row">
+        <span class="chip" @click="searchRoute('武功山')">武功山</span>
+        <span class="chip" @click="searchRoute('雨崩')">雨崩</span>
+        <span class="chip" @click="searchRoute('虎跳峡')">虎跳峡</span>
+        <span class="chip" @click="searchRoute('四姑娘山')">四姑娘山</span>
+        <span class="chip" @click="searchRoute('北京周边徒步')">北京周边</span>
+      </div>
+    </div>
+    <div x-show="loading.route" class="loading-pulse" style="padding:20px 40px">RouteAgent 搜索中...</div>
+    <!-- 搜索结果（有路线时） -->
+    <div x-show="routeResults && routeResults.routes && routeResults.routes.length > 0" style="padding:0 40px">
+      <div class="card-grid">
+        <template x-for="(r, idx) in routeResults.routes" :key="idx">
+          <div class="card" @click="openRouteDrawer(r)" style="cursor:pointer">
+            <div class="card-title" x-text="r.name"></div>
+            <div class="route-detail-grid">
+              <div class="route-stat"><div class="stat-value" x-text="r.distance"></div><div class="stat-label">距离</div></div>
+              <div class="route-stat"><div class="stat-value" x-text="r.elevation_gain"></div><div class="stat-label">爬升</div></div>
+              <div class="route-stat"><div class="stat-value" x-text="r.max_altitude"></div><div class="stat-label">海拔</div></div>
+              <div class="route-stat"><div class="stat-value" x-text="r.duration"></div><div class="stat-label">耗时</div></div>
+            </div>
+            <div class="card-meta">
+              <span class="card-tag highlight" x-text="r.difficulty"></span>
+              <span class="card-tag" x-text="r.best_season"></span>
+              <span class="card-tag" x-text="'⭐ '+r.rating"></span>
+            </div>
+            <div style="font-size:.8rem;color:var(--sage);margin-top:8px" x-text="r.summary"></div>
+            <div style="margin-top:10px;text-align:right">
+              <button class="btn btn-amber btn-sm" @click.stop="addFavorite('route', r.name, r)" :disabled="inFlight.addFavorite">⭐ 收藏</button>
+            </div>
+          </div>
+        </template>
+      </div>
+      <div class="card" style="margin-top:8px" x-show="routeResults.llm_summary">
+        <div class="card-title">AI 分析</div>
+        <div class="md-content" x-html="md(routeResults.llm_summary)"></div>
+      </div>
+    </div>
+    <!-- 搜索结果（无路线时） -->
+    <div x-show="routeResults && (!routeResults.routes || routeResults.routes.length === 0)" class="empty-state">
+      <div class="empty-icon">🏔️</div>
+      <h3>未找到路线</h3>
+      <p>请尝试其他关键词</p>
+    </div>
+    <!-- 初始空状态 -->
+    <div x-show="!routeResults && !loading.route" class="empty-state">
+      <div class="empty-icon">🏔️</div>
+      <h3>探索徒步路线</h3>
+      <p>输入关键词搜索全国热门徒步路线，获取结构化轨迹数据、AI 分析与安全评估</p>
+      <div class="empty-hints">
+        <span class="empty-hint" @click="searchRoute('武功山')">🏕️ 武功山</span>
+        <span class="empty-hint" @click="searchRoute('雨崩')">⛰️ 雨崩</span>
+        <span class="empty-hint" @click="searchRoute('虎跳峡')">🏞️ 虎跳峡</span>
+        <span class="empty-hint" @click="searchRoute('四姑娘山')">🗻 四姑娘山</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Route Detail Drawer -->
+  <div class="drawer-overlay" x-show="routeDrawerOpen" @click="routeDrawerOpen=false" x-transition.opacity></div>
+  <div class="route-drawer" :class="{open: routeDrawerOpen}">
+    <div x-show="routeDrawerData" x-transition.opacity>
+      <div class="drawer-content">
+        <button class="drawer-close" @click="routeDrawerOpen=false">✕</button>
+        <h2 class="drawer-title" x-text="routeDrawerData?.name"></h2>
+        <div class="route-detail-grid">
+          <div class="route-stat"><div class="stat-value" x-text="routeDrawerData?.distance"></div><div class="stat-label">距离</div></div>
+          <div class="route-stat"><div class="stat-value" x-text="routeDrawerData?.elevation_gain"></div><div class="stat-label">爬升</div></div>
+          <div class="route-stat"><div class="stat-value" x-text="routeDrawerData?.max_altitude"></div><div class="stat-label">海拔</div></div>
+          <div class="route-stat"><div class="stat-value" x-text="routeDrawerData?.duration"></div><div class="stat-label">耗时</div></div>
+        </div>
+        <div class="drawer-tags">
+          <span class="card-tag highlight" x-text="routeDrawerData?.difficulty"></span>
+          <span class="card-tag" x-text="routeDrawerData?.best_season"></span>
+          <span class="card-tag" x-text="'⭐ '+routeDrawerData?.rating"></span>
+        </div>
+        <div class="drawer-section" x-show="routeDrawerData?.summary">
+          <h4>路线概要</h4>
+          <p x-text="routeDrawerData.summary"></p>
+        </div>
+        <div class="drawer-section" x-show="routeResults?.llm_summary">
+          <h4>AI 分析</h4>
+          <div class="md-content" x-html="md(routeResults.llm_summary)"></div>
+        </div>
+        <div class="drawer-actions">
+          <button class="btn btn-amber btn-sm" @click="addFavorite('route', routeDrawerData.name, routeDrawerData)" :disabled="inFlight.addFavorite">⭐ 收藏</button>
+          <button class="btn btn-outline btn-sm" @click="navigate('equipment'); routeDrawerOpen=false">⬡ 装备推荐</button>
+          <button class="btn btn-outline btn-sm" @click="navigate('weather'); weatherLocation=routeDrawerData.name; routeDrawerOpen=false">◐ 天气查询</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== EQUIPMENT PAGE ====== -->
+  <div x-show="page==='equipment'" x-transition>
+    <div class="page-header">
+      <h2>装备推荐</h2>
+      <div x-show="equipResults" style="font-size:.78rem;color:var(--sage)">上次结果已保留</div>
+    </div>
+    <div style="padding:0 40px">
+      <div class="glass-panel" style="padding:16px 20px;margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+        <select class="form-select" x-model="equipMode">
+          <option value="light">轻装徒步</option><option value="heavy">重装徒步</option>
+        </select>
+        <select class="form-select" x-model="equipDays">
+          <option value="1">1天</option><option value="2">2天</option><option value="3">3天</option>
+          <option value="5">5天</option><option value="7">7天</option>
+        </select>
+        <select class="form-select" x-model="equipSeason">
+          <option value="春">春季</option><option value="夏">夏季</option><option value="秋">秋季</option><option value="冬">冬季</option>
+        </select>
+        <button class="btn btn-amber" @click="recommendEquip()" :disabled="inFlight.recommendEquip">生成推荐方案</button>
+      </div>
+    </div>
+    <div x-show="loading.equipment" class="loading-pulse" style="padding:20px 40px">EquipmentAgent 生成中...</div>
+    <template x-if="equipResults">
+      <div style="padding:0 40px">
+        <div class="card">
+          <div class="card-title" x-text="(equipResults.mode==='heavy'?'重装':'轻装')+'徒步装备方案'"></div>
+          <div class="md-content" x-html="md(equipResults.equipment_list)"></div>
+          <div class="action-row" style="margin-top:12px">
+            <button class="btn btn-outline btn-sm" @click="addFavorite('equipment','装备方案',equipResults)" :disabled="inFlight.addFavorite">收藏</button>
+            <button class="btn btn-outline btn-sm" @click="exportContent('equipment',equipResults)">导出文本</button>
+            <button class="btn btn-amber btn-sm" @click="downloadEquipPoster()">下载海报</button>
+          </div>
+        </div>
+      </div>
+    </template>
+    <div x-show="!equipResults && !loading.equipment" class="empty-state">
+      <div class="empty-icon">🎒</div>
+      <h3>智能装备推荐</h3>
+      <p>选择徒步模式和参数，EquipmentAgent 基于路线特征自动匹配专属装备方案</p>
+      <div class="empty-hints">
+        <span class="empty-hint" @click="equipMode='light';equipDays=1;recommendEquip()">🥾 轻装一日</span>
+        <span class="empty-hint" @click="equipMode='heavy';equipDays=3;recommendEquip()">🏕️ 重装三日</span>
+        <span class="empty-hint" @click="equipMode='light';equipDays=5;recommendEquip()">🗺️ 轻装五日</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== TICKET PAGE ====== -->
+  <div x-show="page==='ticket'" x-transition>
+    <div class="page-header">
+      <h2>交通票务</h2>
+      <div x-show="ticketResults" style="font-size:.78rem;color:var(--sage)">上次结果已保留</div>
+    </div>
+    <div style="padding:0 40px">
+      <div class="card">
+        <div class="form-grid">
+          <div class="form-group"><label class="form-label">出发城市</label><input class="form-input" placeholder="北京" x-model="ticketFrom" maxlength="50" x-effect="page==='ticket' && $nextTick(() => $el.focus())"></div>
+          <div class="form-group"><label class="form-label">目的城市</label><input class="form-input" placeholder="萍乡" x-model="ticketTo" maxlength="50"></div>
+          <div class="form-group"><label class="form-label">出行日期</label><input class="form-input" type="date" x-model="ticketDate"></div>
+        </div>
+        <button class="btn btn-primary" style="margin-top:16px" @click="queryTicket()" :disabled="inFlight.queryTicket">查询车票</button>
+      </div>
+    </div>
+    <div x-show="loading.ticket" class="loading-pulse" style="padding:20px 40px">TicketAgent 查询中...</div>
+    <div x-show="page==='ticket' && ticketResults && ticketResults.tickets && ticketResults.tickets.length > 0" style="padding:0 40px">
+        <div class="card">
+          <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+            <table class="ticket-table">
+              <thead><tr><th>车次</th><th>出发</th><th>到达</th><th>历时</th><th>座位/票价</th><th>状态</th></tr></thead>
+              <tbody>
+                <template x-for="t in ticketResults.tickets" :key="t.train_no + t.departure_time">
+                  <tr>
+                    <td class="train-no" x-text="t.train_no"></td>
+                    <td x-text="t.departure_time"></td><td x-text="t.arrival_time"></td>
+                    <td x-text="t.duration"></td><td class="price" x-text="t.seat_types"></td>
+                    <td x-text="t.status"></td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" x-show="ticketResults.transfer_advice" style="margin-top:12px">
+          <div class="card-title">接驳建议</div>
+          <div class="md-content" x-html="md(ticketResults.transfer_advice)"></div>
+        </div>
+      </div>
+    </div>
+    <div x-show="page==='ticket' && !ticketResults?.tickets?.length && !loading.ticket" class="empty-state">
+      <div class="empty-icon">🚂</div>
+      <h3>交通票务查询</h3>
+      <p>对接 12306 MCP 服务，输入出发城市、目的城市和出行日期，实时查询火车票信息</p>
+    </div>
+  </div>
+
+  <!-- ====== WEATHER PAGE ====== -->
+  <div x-show="page==='weather'" x-transition>
+    <div class="page-header">
+      <h2>天气查询</h2>
+      <div x-show="weatherResults" style="font-size:.78rem;color:var(--sage)">上次结果已保留</div>
+    </div>
+    <div style="padding:0 40px">
+      <div style="display:flex;gap:10px;max-width:500px;margin-bottom:16px">
+        <input class="form-input" placeholder="徒步地点..." x-model="weatherLocation" @keydown.enter="queryWeather()" maxlength="100"
+               x-effect="page==='weather' && $nextTick(() => $el.focus())">
+        <button class="btn btn-primary" @click="queryWeather()" :disabled="inFlight.queryWeather">查询</button>
+      </div>
+    </div>
+    <div x-show="loading.weather" class="loading-pulse" style="padding:20px 40px">WeatherAgent 查询中...</div>
+    <div x-show="page==='weather' && weatherResults && weatherResults.forecast && weatherResults.forecast.length > 0" style="padding:0 40px">
+        <div class="card">
+          <div class="card-title" x-text="'📍 '+weatherResults.location+' 天气预报'"></div>
+          <div class="weather-row">
+            <template x-for="d in weatherResults.forecast" :key="d.date">
+              <div class="weather-day-card">
+                <div class="day-name" x-text="d.date?.slice(5)"></div>
+                <div class="day-icon" x-text="parseInt(d.precipitation)>50?'🌧️':'☀️'"></div>
+                <div class="day-temp" x-text="d.temperature"></div>
+                <div class="day-rain" x-text="'💧'+d.precipitation"></div>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div class="card" style="margin-top:12px" x-show="weatherResults.hiking_assessment"><div class="card-title">徒步可行性评估</div><div class="md-content" x-html="md(weatherResults.hiking_assessment)"></div></div>
+        <div class="card" style="margin-top:12px" x-show="weatherResults.equipment_advice"><div class="card-title">装备调整建议</div><div class="md-content" x-html="md(weatherResults.equipment_advice)"></div></div>
+      </div>
+    </div>
+    <div x-show="page==='weather' && !weatherResults?.forecast?.length && !loading.weather" class="empty-state">
+      <div class="empty-icon">🌤️</div>
+      <h3>天气查询</h3>
+      <p>对接天气 MCP 服务，输入徒步地点获取实时天气、7天预报与出行可行性评估</p>
+    </div>
+  </div>
+
+  <!-- ====== PLAN PAGE ====== -->
+  <div x-show="page==='plan'" x-transition>
+    <div class="page-header"><h2>行程智能预案</h2></div>
+    <div class="two-col">
+      <div>
+        <!-- Step Progress -->
+        <div style="display:flex;align-items:center;gap:0;margin-bottom:16px;padding:0 4px">
+          <template x-for="(step, si) in ['路线','天气','交通','装备']" :key="si">
+            <div style="display:flex;align-items:center;gap:0;flex:1">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:4px;flex:1">
+                <div class="step-dot" :style="{
+                  width: si <= planActiveStep ? '28px' : '24px',
+                  height: si <= planActiveStep ? '28px' : '24px',
+                  borderRadius: '50%',
+                  background: si < planActiveStep ? 'var(--aurora)' : si === planActiveStep ? 'var(--amber)' : 'rgba(0,0,0,0.04)',
+                  border: si < planActiveStep ? 'none' : '1px solid ' + (si === planActiveStep ? 'var(--amber)' : 'rgba(0,0,0,0.10)'),
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: '.65rem', fontWeight: 700, color: si <= planActiveStep ? '#000' : 'var(--text-muted)',
+                  transition: 'all var(--transition)',
+                  fontFamily: '"Outfit", sans-serif'
+                }" x-text="si < planActiveStep ? '✓' : si + 1"></div>
+                <span style="font-size:.6rem;color: si <= planActiveStep ? 'var(--text-primary)' : 'var(--text-muted)';text-transform:uppercase;letter-spacing:.04em;font-family:'Outfit',sans-serif;font-weight:600;transition:color var(--transition)" x-text="step"></span>
+              </div>
+              <div x-show="si < 3" style="flex:1;height:1px;background: si < planActiveStep ? 'var(--aurora)' : 'rgba(0,0,0,0.06)';transition:background var(--transition);margin-bottom:16px"></div>
+            </div>
+          </template>
+        </div>
+        <div class="card">
+          <div class="card-title">Step 1 — 搜索路线</div>
+          <div style="display:flex;gap:8px;margin-bottom:8px">
+            <input class="form-input" placeholder="搜索徒步路线..." x-model="planSearchKw" @keydown.enter="planSearchRoute()" maxlength="100">
+            <button class="btn btn-primary btn-sm" @click="planSearchRoute()">搜索</button>
+          </div>
+          <div x-show="planSearchResults && planSearchResults.length > 0" style="max-height:250px;overflow-y:auto">
+            <template x-for="(r,i) in planSearchResults" :key="i">
+              <div class="history-item" @click="planSelectRoute(i)" style="border:1px solid var(--sand);border-radius:var(--radius);margin:4px 0;padding:10px;cursor:pointer"
+                   :style="planSelectedRouteIdx===i ? 'border-color:var(--amber);background:var(--warm-stone)' : ''">
+                <div style="flex:1"><div style="font-weight:600;font-size:.85rem" x-text="r.name"></div>
+                <div style="font-size:.75rem;color:var(--sage)" x-text="r.distance+' | '+r.difficulty+' | '+r.duration"></div></div>
+                <span x-show="planSelectedRouteIdx===i" style="color:var(--amber);font-weight:600">✓ 已选</span>
+              </div>
+            </template>
+          </div>
+          <div x-show="planSelectedRoute" style="margin-top:8px;padding:8px 12px;background:var(--warm-stone);border-radius:var(--radius);font-size:.8rem">
+            已选路线: <strong x-text="planSelectedRoute?.name"></strong>
+          </div>
+        </div>
+        <div class="card" x-show="planSelectedRoute">
+          <div class="card-title">Step 2 — 出行时间与天气</div>
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">出行日期</label><input class="form-input" type="date" x-model="planDate"></div>
+            <div class="form-group"><label class="form-label">徒步天数</label><input class="form-input" type="number" x-model="planDays" min="1" max="30"></div>
+          </div>
+          <button class="btn btn-outline btn-sm" style="margin-top:8px" @click="planQueryWeather()" :disabled="inFlight.planQueryWeather">
+            <span x-show="!planWeatherData && !planWeatherQuerying">查询天气</span>
+            <span x-show="planWeatherQuerying" style="color:var(--amber)">⏳ 查询中...</span>
+            <span x-show="planWeatherData" style="color:var(--primary)">✓ 天气已获取: <span x-text="planWeatherData?.location"></span></span>
+          </button>
+        </div>
+        <div class="card" x-show="planSelectedRoute">
+          <div class="card-title">Step 3 — 交通票务 (可选)</div>
+          <div class="form-grid">
+            <div class="form-group"><label class="form-label">出发城市</label><input class="form-input" placeholder="如: 北京" x-model="planTicketFrom" maxlength="50"></div>
+            <div class="form-group"><label class="form-label">目的城市</label><input class="form-input" placeholder="如: 萍乡" x-model="planTicketTo" maxlength="50"></div>
+          </div>
+          <div x-show="planTicketFrom && planTicketTo" style="margin-top:8px">
+            <button class="btn btn-outline btn-sm" @click="planQueryTicket()" :disabled="inFlight.planQueryTicket">
+              <span x-show="!planTicketData && !planTicketQuerying">查询车票</span>
+              <span x-show="planTicketQuerying" style="color:var(--amber)">⏳ 查询中...</span>
+              <span x-show="planTicketData" style="color:var(--primary)">✓ 找到 <span x-text="planTicketData.tickets?.length||0"></span> 个车次</span>
+            </button>
+          </div>
+        </div>
+        <div class="card" x-show="planSelectedRoute">
+          <div class="card-title">Step 4 — 装备模式</div>
+          <div class="form-group">
+            <select class="form-select" x-model="planEquipMode">
+              <option value="light">轻装徒步（有补给住宿）</option>
+              <option value="heavy">重装徒步（全程背负）</option>
+            </select>
+          </div>
+        </div>
+        <button class="btn btn-amber btn-block" style="margin-top:8px;font-size:1rem;padding:14px" @click="planGenerateAll()" x-show="planSelectedRoute" :disabled="inFlight.planGenerate">
+          生成完整行程预案
+        </button>
+      </div>
+      <div>
+        <div x-show="page==='plan' && loading.plan" class="loading-pulse">PlanAgent 生成中...</div>
+        <div x-show="page==='plan' && planResults">
+          <div>
+            <div class="plan-block" x-show="planResults.altitude_plan"><h3>🏔️ 海拔健康应对</h3><div class="content md-content" x-html="md(planResults.altitude_plan)"></div></div>
+            <div class="plan-block" x-show="planResults.fitness_plan"><h3>💪 体能与行程分配</h3><div class="content md-content" x-html="md(planResults.fitness_plan)"></div></div>
+            <div class="plan-block" x-show="planResults.weather_risk_plan"><h3>⚠️ 天气风险应对</h3><div class="content md-content" x-html="md(planResults.weather_risk_plan)"></div></div>
+            <div class="plan-block" x-show="planResults.environment_knowledge"><h3>🌲 环境安全知识</h3><div class="content md-content" x-html="md(planResults.environment_knowledge)"></div></div>
+            <div class="plan-block" x-show="planResults.daily_guide"><h3>📅 每日行动指南</h3><div class="content md-content" x-html="md(planResults.daily_guide)"></div></div>
+            <div class="plan-block" x-show="planResults.transportation_plan"><h3>🚂 交通出行建议</h3><div class="content md-content" x-html="md(planResults.transportation_plan)"></div></div>
+            <div class="action-row" style="padding-bottom:24px">
+              <button class="btn btn-amber btn-sm" @click="addFavorite('plan','行程预案 - '+planSearchKw,planResults)" :disabled="inFlight.addFavorite">收藏预案</button>
+              <button class="btn btn-outline btn-sm" @click="downloadPlan()">下载海报</button>
+            </div>
+          </div>
+        </div>
+        <div x-show="page==='plan' && !planResults && !loading.plan" class="empty-state">
+          <div class="empty-icon">📋</div>
+          <p>完成左侧步骤后点击生成按钮</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== QA PAGE ====== -->
+  <div x-show="page==='qa'" x-transition class="qa-page">
+    <canvas class="qa-canvas" id="qaCanvas"></canvas>
+    <div class="page-header" style="position:relative;z-index:1"><h2>智能问答</h2></div>
+    <div class="chat-area">
+      <div class="chat-messages" id="qa-scroll">
+        <div class="chat-msg assistant" style="white-space:pre-wrap">你好！我是户外徒步智能助手，基于 LangGraph QAAgent。
+我可以回答：野外生存、户外急救、天气判断、LNT环保法则、装备保养等问题。</div>
+        <template x-for="(msg,idx) in qaMessages" :key="idx">
+          <div class="chat-msg" :class="msg.role">
+            <div x-show="msg.role==='user'" x-text="msg.content"></div>
+            <div x-show="msg.role==='assistant'" x-html="msg.html || md(msg.content)"></div>
+            <div class="safety-warning" x-show="msg.role==='assistant'&&(msg.content?.includes('失温')||msg.content?.includes('高反')||msg.content?.includes('雷击')||msg.content?.includes('危险'))">
+              ⚠️ 以上内容涉及户外风险，请务必在专业指导下行动
+            </div>
+          </div>
+        </template>
+        <div x-show="loading.qa" class="loading-pulse" style="padding:8px">思考中...</div>
+      </div>
+      <div class="chat-input-bar">
+        <input type="text" placeholder="输入你的户外问题..." x-model="qaInput" @keydown.enter="sendQA()" maxlength="2000"
+               x-effect="page==='qa' && $nextTick(() => $el.focus())" :disabled="inFlight.sendQA">
+        <button @click="sendQA()" :disabled="inFlight.sendQA">➤</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== FORUM PAGE ====== -->
+  <div x-show="page==='forum'" x-transition>
+    <div class="page-header">
+      <h2>社区讨论</h2>
+      <button class="btn btn-amber btn-sm" @click="forumView='list'" x-show="forumView!=='list'">← 返回</button>
+    </div>
+
+    <!-- List View -->
+    <div x-show="forumView==='list'" x-transition.opacity style="padding:0 40px">
+      <div class="forum-tabs">
+        <button class="forum-tab" :class="{active:forumCatId===null}" @click="forumCatId=null;forumPage=1;forumLoadPosts()">全部</button>
+        <template x-for="c in forumCategories" :key="c.id">
+          <button class="forum-tab" :class="{active:forumCatId===c.id}" @click="forumCatId=c.id;forumPage=1;forumLoadPosts()">
+            <span x-text="c.name"></span>
+          </button>
+        </template>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="font-size:.85rem;color:var(--sage)" x-text="'共 '+forumTotal+' 条动态'"></div>
+        <button class="btn btn-primary btn-sm" @click="forumNewPost={catId:forumCatId||forumCategories[0]?.id,title:'',content:'',images:[]};forumView='create'" x-show="user">+ 发布动态</button>
+      </div>
+
+      <!-- Skeleton loading -->
+      <div x-show="loading.forum" style="padding:0">
+        <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
+      </div>
+
+      <div x-show="forumPosts.length > 0">
+        <div class="feed-list">
+          <template x-for="p in forumPosts" :key="p.id">
+            <div class="feed-item" :id="'post-'+p.id">
+              <div class="feed-avatar" :style="p.author_avatar_url ? 'background-image:url('+p.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="p.author_avatar_url ? '' : (p.author_name||'?')[0]?.toUpperCase()"></div>
+              <div class="feed-body">
+                <div class="feed-header">
+                  <span class="feed-author" x-text="p.author_name"></span>
+                  <span class="feed-cat" x-text="p.category_name"></span>
+                  <span class="feed-time" x-text="formatTime(p.created_at)"></span>
+                </div>
+                <div class="feed-content md-content" x-html="md(p.content)"></div>
+                <div class="feed-images" x-show="p.images?.length">
+                  <template x-for="(img,i) in forumVisibleImages(p.images, p.id)" :key="p.id + '-img-' + i">
+                    <img :src="img" class="feed-img" @click.stop="forumOpenLightbox(img)" loading="lazy">
+                  </template>
+                  <div class="feed-img-more" x-show="forumHasMoreImages(p.images) && !forumExpandedPosts[p.id]" @click.stop="forumToggleImages(p.id)">
+                    <span x-text="'+'+(p.images.length-3)"></span>
+                  </div>
+                </div>
+                <div class="feed-inline-reply" x-show="p.latest_reply && !forumExpandedReplies[p.id]">
+                  <span class="inline-reply-author" x-text="p.latest_reply.author_name+': '"></span>
+                  <span class="inline-reply-text" x-text="p.latest_reply.content?.slice(0,80)+(p.latest_reply.content?.length>80?'...':'')"></span>
+                </div>
+                <div class="feed-expanded-replies" x-show="forumExpandedReplies[p.id]">
+                  <template x-for="r in forumExpandedReplies[p.id]" :key="r.id">
+                    <div class="feed-inline-reply" style="margin-top:4px">
+                      <span class="inline-reply-author" x-text="r.author_name+': '"></span>
+                      <span class="inline-reply-text" x-text="r.content"></span>
+                      <div class="feed-images" x-show="r.images?.length" style="margin-top:4px">
+                        <template x-for="img in forumVisibleImages(r.images, 'r'+r.id)" :key="'r'+r.id+'-'+img">
+                          <img :src="img" class="feed-img" @click.stop="forumOpenLightbox(img)" loading="lazy" style="width:60px;height:60px">
+                        </template>
+                      </div>
+                      <button class="feed-del-btn" @click.stop="forumDeleteReply(r.id, p.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" style="font-size:.7rem">🗑</button>
+                    </div>
+                  </template>
+                  <div x-show="forumLoadingReplies[p.id]" class="loading-pulse" style="padding:8px">加载回复中...</div>
+                </div>
+                <div class="feed-actions">
+                  <span x-show="p.reply_count > 1" @click.stop="forumToggleReplies(p.id)" style="cursor:pointer;color:var(--amber);font-weight:500">
+                    <span x-show="!forumExpandedReplies[p.id]" x-text="'展开全部'+p.reply_count+'条回复'"></span>
+                    <span x-show="forumExpandedReplies[p.id]">收起回复</span>
+                  </span>
+                  <span x-show="p.reply_count <= 1" style="color:var(--sage);font-size:.78rem">💬 <span x-text="p.reply_count||0"></span></span>
+                  <span>👁 <span x-text="p.view_count||0"></span></span>
+                  <button class="feed-del-btn" @click.stop="forumDeletePost(p.id)" x-show="user && (user.id===p.author_id || user.role==='admin')">🗑</button>
+                  <button class="feed-reply-btn" @click.stop="forumToggleReplyInput(p.id)" x-show="user">↩ 回复</button>
+                </div>
+                <div class="feed-reply-box" x-show="forumReplyInputFor === p.id" @click.stop="">
+                  <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="2" maxlength="2000"
+                   style="width:100%;margin-bottom:6px;font-size:.82rem"
+                   @keydown.ctrl.enter="forumQuickReply(p.id)" @keydown.meta.enter="forumQuickReply(p.id)"
+                   x-effect="forumReplyInputFor === p.id && $nextTick(() => $el.focus())"></textarea>
+                  <div style="display:flex;gap:6px;align-items:center">
+                    <button class="btn btn-amber btn-sm" @click="forumQuickReply(p.id)" :disabled="inFlight.forumQuickReply">发送</button>
+                    <button class="btn btn-ghost btn-sm" @click="forumReplyInputFor=null">取消</button>
+                    <span style="font-size:.7rem;color:var(--sage)">Ctrl+Enter 快捷发送</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <div x-show="!loading.forum && !forumPosts.length" class="empty-state">
+        <div class="empty-icon">💬</div><h3>社区讨论</h3><p>选择分类标签查看动态，或点击「发布动态」参与讨论</p>
+        <div class="empty-hints" x-show="user"><span class="empty-hint" @click="forumNewPost={catId:forumCatId||forumCategories[0]?.id,title:'',content:'',images:[]};forumView='create'">✍️ 发布第一条动态</span></div>
+      </div>
+
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:16px" x-show="forumTotal > 20">
+        <button class="btn btn-outline btn-sm" @click="forumPage--;forumLoadPosts()" :disabled="forumPage<=1||loading.forum">上一页</button>
+        <span style="line-height:32px;font-size:.85rem;color:var(--sage)" x-text="forumPage+' / '+Math.ceil(forumTotal/20)"></span>
+        <button class="btn btn-outline btn-sm" @click="forumPage++;forumLoadPosts()" :disabled="forumPage>=Math.ceil(forumTotal/20)||loading.forum">下一页</button>
+      </div>
+    </div>
+
+    <!-- Create View -->
+    <div x-show="forumView==='create'" x-transition.opacity style="padding:20px 40px;max-width:700px">
+      <div class="card" style="padding:20px 24px">
+        <div class="form-group"><label class="form-label">分类</label>
+          <select class="form-select" x-model="forumNewPost.catId" style="max-width:200px">
+            <template x-for="c in forumCategories" :key="c.id"><option :value="c.id" x-text="c.name"></option></template>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">标题</label>
+          <input class="form-input" x-model="forumNewPost.title" placeholder="给你的动态起个标题（可选）" maxlength="200" style="width:100%">
+        </div>
+        <div class="form-group"><label class="form-label">内容</label>
+          <textarea class="form-input forum-editor" x-model="forumNewPost.content" placeholder="分享你的户外经历..." rows="6" maxlength="10000" style="width:100%"></textarea>
+        </div>
+        <div class="form-group"><label class="form-label">图片</label>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;min-height:40px;align-items:center">
+            <template x-for="(img,i) in forumNewPost.images" :key="'np-'+i">
+              <div style="position:relative;display:inline-block">
+                <img :src="img" style="width:72px;height:72px;object-fit:cover;border-radius:var(--radius)">
+                <button @click="forumNewPost.images.splice(i,1)" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;background:var(--danger);color:#fff;border:none;cursor:pointer;font-size:10px;line-height:1">×</button>
+              </div>
+            </template>
+            <span class="btn btn-outline btn-sm" style="cursor:pointer;height:32px" @click="document.getElementById('forumFileInput').click()">+ 上传图片</span>
+            <input type="file" accept="image/*" @change="forumUploadImage($event)" style="display:none" multiple id="forumFileInput">
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;margin-top:16px">
+          <button class="btn btn-amber" @click="forumCreatePost()" :disabled="inFlight.forumCreate">发布</button>
+          <button class="btn btn-outline" @click="forumView='list'">取消</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Detail View -->
+    <div x-show="forumView==='detail' && forumPostDetail" x-transition.opacity style="padding:0 40px;max-width:750px">
+      <div x-show="forumDetailLoading" class="loading-pulse">加载中...</div>
+      <div x-show="!forumDetailLoading">
+        <div class="feed-detail-card">
+          <div class="feed-item" style="cursor:default;border:none;padding:0">
+            <div class="feed-avatar" style="width:44px;height:44px;font-size:1rem" :style="forumPostDetail.author_avatar_url ? 'background-image:url('+forumPostDetail.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="forumPostDetail.author_avatar_url ? '' : (forumPostDetail.author_name||'?')[0]?.toUpperCase()"></div>
+            <div class="feed-body">
+              <div class="feed-header">
+                <span class="feed-author" x-text="forumPostDetail.author_name"></span>
+                <span class="feed-cat" x-text="forumPostDetail.category_name"></span>
+                <span class="feed-time" x-text="formatTime(forumPostDetail.created_at)"></span>
+                <button class="feed-del-btn" @click="forumDeletePost(forumPostDetail.id);forumView='list'" x-show="user && (user.id===forumPostDetail.author_id || user.role==='admin')" style="margin-left:auto">🗑 删除</button>
+              </div>
+              <div class="feed-content md-content" x-html="md(forumPostDetail.content)"></div>
+              <div class="feed-images" x-show="forumPostDetail.images?.length">
+                <template x-for="img in forumVisibleImages(forumPostDetail.images, forumPostDetail.id)" :key="forumPostDetail.id + '-d-' + img">
+                  <img :src="img" class="feed-img" @click="forumOpenLightbox(img)" loading="lazy">
+                </template>
+                <div class="feed-img-more" x-show="forumHasMoreImages(forumPostDetail.images) && !forumExpandedPosts[forumPostDetail.id]" @click="forumToggleImages(forumPostDetail.id)">
+                  <span x-text="'+'+(forumPostDetail.images.length-3)"></span>
+                </div>
+              </div>
+              <div class="feed-actions" style="padding-top:8px">
+                <span>👁 <span x-text="forumPostDetail.view_count||0"></span></span>
+                <span>💬 <span x-text="forumPostDetail.reply_count||0"></span></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-top:8px">
+          <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--deep-forest);margin-bottom:12px;padding-left:56px">
+            回复 (<span x-text="forumPostDetail.replies?.length||0"></span>)
+          </div>
+          <div x-show="forumPostDetail.replies && forumPostDetail.replies.length > 0">
+            <div class="reply-list">
+              <template x-for="(r,idx) in forumPostDetail.replies" :key="r.id">
+                <div class="reply-item">
+                  <div class="feed-avatar" style="width:32px;height:32px;font-size:.75rem" :style="r.author_avatar_url ? 'background-image:url('+r.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="r.author_avatar_url ? '' : (r.author_name||'?')[0]?.toUpperCase()"></div>
+                  <div class="feed-body">
+                    <div class="feed-header">
+                      <span class="feed-author" x-text="r.author_name"></span>
+                      <span class="feed-time" x-text="formatTime(r.created_at)"></span>
+                      <button class="feed-del-btn" @click="forumDeleteReply(r.id, forumPostDetail.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" style="margin-left:auto">🗑</button>
+                    </div>
+                    <div class="feed-content md-content" x-html="md(r.content)"></div>
+                    <div class="feed-images" x-show="r.images?.length">
+                      <template x-for="img in forumVisibleImages(r.images, 'r'+r.id)" :key="'rd-'+r.id+'-'+img">
+                        <img :src="img" class="feed-img" @click="forumOpenLightbox(img)" loading="lazy" style="width:80px;height:80px">
+                      </template>
+                      <div class="feed-img-more" x-show="forumHasMoreImages(r.images) && !forumExpandedPosts['r'+r.id]" @click="forumToggleImages('r'+r.id)" style="width:80px;height:80px;font-size:.8rem">
+                        <span x-text="'+'+(r.images.length-3)"></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div x-show="!forumPostDetail.replies?.length" style="color:var(--sage);font-size:.85rem;padding:16px 56px">暂无回复</div>
+        </div>
+
+        <div class="card" style="margin-top:16px;margin-left:56px" x-show="user">
+          <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="3" maxlength="2000" style="width:100%;margin-bottom:8px"></textarea>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">回复</button>
+            <span class="btn btn-outline btn-sm" style="cursor:pointer" @click="document.getElementById('forumReplyFileInput').click()">📷 图片</span>
+            <input type="file" accept="image/*" @change="forumReplyUploadImage($event)" style="display:none" id="forumReplyFileInput">
+            <template x-for="(img,i) in forumReplyImages" :key="'fri-'+i"><span style="font-size:.75rem;color:var(--sage)" x-text="'📎 图'+(i+1)"></span></template>
+          </div>
+        </div>
+        <div style="margin-top:16px;margin-left:56px;text-align:center" x-show="!user">
+          <span style="color:var(--sage);font-size:.85rem">请<a href="#" @click.prevent="toggleAuth()" style="color:var(--amber)">登录</a>后参与讨论</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ====== IMAGE LIGHTBOX ====== -->
+  <div class="lightbox-overlay" x-show="forumLightboxOpen" @click="forumCloseLightbox()" @keydown.escape="forumCloseLightbox()"
+       x-transition.opacity tabindex="-1" x-effect="forumLightboxOpen && $nextTick(() => $el.focus())">
+    <img :src="forumLightboxSrc" class="lightbox-img" @click.stop="">
+  </div>
+
+  <!-- ====== PROFILE PAGE ====== -->
+  <div x-show="page==='profile'" x-transition>
+    <div class="page-header"><h2>个人中心</h2></div>
+    <div class="two-col">
+      <div>
+        <div class="card" style="text-align:center">
+          <div x-show="user" x-transition.opacity>
+            <label class="avatar-upload-area" @dragover.prevent @drop.prevent="avatarDrop($event)">
+              <div class="avatar-preview" :style="user.avatar_url ? 'background-image:url('+user.avatar_url+')' : ''">
+                <span x-show="!user.avatar_url" x-text="user.username[0]?.toUpperCase()" style="font-size:2.5rem;color:var(--sage)"></span>
+              </div>
+              <div class="avatar-upload-hint" x-show="!avatarUploading">点击更换头像</div>
+              <div class="avatar-upload-hint" x-show="avatarUploading">⏳ AI审核中...</div>
+              <input type="file" accept="image/*" @change="avatarUpload($event)" style="display:none" id="avatarInput">
+            </label>
+            <div x-show="avatarMsg" x-text="avatarMsg" :style="'margin-top:4px;font-size:.75rem;color:'+(avatarPassed?'var(--primary)':'var(--danger)')"></div>
+            <div class="card-title" x-text="user.username" style="margin-top:12px"></div>
+            <div style="font-size:.8rem;color:var(--sage);margin-bottom:12px" x-text="user.role==='admin'?'管理员':'普通用户'"></div>
+            <button class="btn btn-outline btn-sm" @click="logout()">退出登录</button>
+          </div>
+          <div x-show="!user" x-transition.opacity>
+            <div style="font-size:3rem;margin-bottom:8px">🔒</div>
+            <div class="card-title">未登录</div>
+            <div style="font-size:.8rem;color:var(--sage);margin-bottom:12px">登录后可收藏路线和预案</div>
+            <button class="btn btn-amber btn-sm" @click="toggleAuth()">登录 / 注册</button>
+          </div>
+        </div>
+        <div style="margin-top:20px">
+          <h3 style="font-family:'Playfair Display',serif;color:var(--deep-forest);margin-bottom:8px">⭐ 收藏的路线</h3>
+          <div x-show="favRoutes.length > 0">
+            <div class="fav-list">
+              <template x-for="f in favRoutes" :key="f.id">
+                <div class="fav-item">
+                  <div style="flex:1"><div style="font-weight:500;font-size:.85rem" x-text="f.title"></div>
+                  <div style="font-size:.7rem;color:var(--sage)" x-text="f.created_at?.slice(0,10)"></div></div>
+                  <button class="btn btn-outline btn-sm" @click="openFavoriteRoute(f)">查看</button>
+                  <button class="btn btn-ghost btn-sm" style="color:var(--danger)" @click="deleteFav(f.id)" :disabled="inFlight.deleteFav">×</button>
+                </div>
+              </template>
+            </div>
+          </div>
+          <div x-show="!favRoutes.length" class="empty-state" style="padding:20px"><p style="font-size:.8rem">暂无收藏路线</p></div>
+        </div>
+      </div>
+      <div>
+        <h3 style="font-family:'Playfair Display',serif;color:var(--deep-forest);margin-bottom:8px">📋 收藏的预案</h3>
+        <div x-show="favPlans.length > 0">
+          <div class="fav-list">
+            <template x-for="f in favPlans" :key="f.id">
+              <div class="fav-item">
+                <div style="flex:1"><div style="font-weight:500;font-size:.85rem" x-text="f.title"></div>
+                <div style="font-size:.7rem;color:var(--sage)" x-text="f.created_at?.slice(0,10)"></div></div>
+                <button class="btn btn-outline btn-sm" @click="viewPlan(f)">查看</button>
+                <button class="btn btn-amber btn-sm" @click="downloadPlanPoster(f)">下载</button>
+                <button class="btn btn-ghost btn-sm" style="color:var(--danger)" @click="deleteFav(f.id)" :disabled="inFlight.deleteFav">×</button>
+              </div>
+            </template>
+          </div>
+        </div>
+        <div x-show="!favPlans.length" class="empty-state" style="padding:20px"><p style="font-size:.8rem">暂无收藏预案</p></div>
+        <div style="margin-top:20px">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <h3 style="font-family:'Playfair Display',serif;color:var(--deep-forest);margin-bottom:8px">📝 查询历史</h3>
+            <button class="btn btn-ghost btn-sm" @click="clearAllHistory()" x-show="history.length">清除</button>
+          </div>
+          <div x-show="history.length > 0">
+            <div class="card" style="padding:8px;max-height:400px;overflow-y:auto">
+              <template x-for="h in history" :key="h.time + h.title">
+                <div class="history-item" @click="h.type==='route' ? restoreRoute(h) : navigate(h.type==='qa'?'qa':h.type)">
+                  <span class="hi-icon" x-text="historyIcon(h.type)"></span>
+                  <div><div style="font-weight:500" x-text="h.title"></div>
+                  <div style="font-size:.7rem;color:var(--sage)" x-text="h.summary"></div></div>
+                  <span class="hi-time" x-text="formatTime(h.time)"></span>
+                </div>
+              </template>
+            </div>
+            </div>
+          </div>
+          <div x-show="!history.length" class="empty-state" style="padding:20px"><p style="font-size:.8rem">暂无查询历史</p></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+
+<!-- ====== AUTH MODAL ====== -->
+<div class="auth-overlay" x-show="showAuth" @click.self="showAuth=false" x-transition.opacity>
+  <div class="auth-card">
+    <div class="auth-tabs">
+      <button :class="{active:authMode==='login'}" @click="authMode='login'">登录</button>
+      <button :class="{active:authMode==='register'}" @click="authMode='register'">注册</button>
+    </div>
+    <div x-show="authMode==='login'" x-transition.opacity>
+      <div class="form-group"><label class="form-label">用户名或邮箱</label><input class="form-input" x-model="loginUsername" maxlength="255" required autofocus placeholder="用户名或邮箱"></div>
+      <div class="form-group"><label class="form-label">密码</label><input class="form-input" type="password" x-model="loginPassword" maxlength="100" required @keydown.enter="doLogin()"></div>
+      <button class="btn btn-primary btn-block" @click="doLogin()" :disabled="inFlight.doLogin">登录</button>
+      <div style="text-align:right;margin-top:10px">
+        <a href="#" @click.prevent="showForgotPassword=true;showAuth=false" style="font-size:.75rem;color:var(--text-muted);text-decoration:none">忘记密码？</a>
+      </div>
+    </div>
+    <div x-show="authMode==='register'" x-transition.opacity>
+      <div class="form-group"><label class="form-label">用户名</label><input class="form-input" x-model="regUsername" maxlength="50" required minlength="2" placeholder="2-50个字符"></div>
+      <div class="form-group"><label class="form-label">邮箱</label><input class="form-input" type="email" x-model="regEmail" maxlength="255" required placeholder="your@email.com"></div>
+      <div class="form-group"><label class="form-label">密码 (6位以上)</label><input class="form-input" type="password" x-model="regPassword" maxlength="100" required minlength="6" @keydown.enter="doRegister()"></div>
+      <button class="btn btn-primary btn-block" @click="doRegister()" :disabled="inFlight.doRegister">注册</button>
+    </div>
+  </div>
+</div>
+
+<!-- ====== FORGOT PASSWORD MODAL ====== -->
+<div class="auth-overlay" x-show="showForgotPassword" @click.self="showForgotPassword=false" x-transition.opacity>
+  <div class="auth-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <h2 style="margin:0;font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--text-primary)">重置密码</h2>
+      <button class="btn btn-ghost btn-sm" @click="showForgotPassword=false;forgotStep=1">✕</button>
+    </div>
+    <!-- Step 1: Enter email -->
+    <div x-show="forgotStep===1" x-transition.opacity>
+      <div class="form-group"><label class="form-label">注册邮箱</label><input class="form-input" type="email" x-model="forgotEmail" placeholder="输入注册时使用的邮箱" maxlength="255" @keydown.enter="forgotPassword()"></div>
+      <button class="btn btn-amber btn-block" @click="forgotPassword()" style="margin-top:12px">发送重置令牌</button>
+      <div style="text-align:center;margin-top:12px">
+        <a href="#" @click.prevent="showForgotPassword=false;showAuth=true;authMode='login'" style="font-size:.78rem;color:var(--text-muted);text-decoration:none">← 返回登录</a>
+      </div>
+    </div>
+    <!-- Step 2: Enter token + new password -->
+    <div x-show="forgotStep===2" x-transition.opacity>
+      <div class="form-group"><label class="form-label">重置令牌</label><input class="form-input" x-model="resetToken" placeholder="已自动填入" maxlength="255" readonly style="font-family:'JetBrains Mono',monospace;font-size:.78rem"></div>
+      <div class="form-group"><label class="form-label">新密码 (6位以上)</label><input class="form-input" type="password" x-model="resetNewPassword" placeholder="输入新密码" maxlength="100" @keydown.enter="resetPassword()"></div>
+      <button class="btn btn-amber btn-block" @click="resetPassword()" style="margin-top:12px">重置密码</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" x-show="toastMsg" x-text="toastMsg" x-transition></div>
+
+<!-- Plan View Modal -->
+<div class="auth-overlay" x-show="planViewOpen" @click.self="planViewOpen=false" x-transition.opacity>
+  <div class="auth-card" style="width:700px;max-width:95vw;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <h3 style="font-family:'Playfair Display',serif;color:var(--deep-forest)" x-text="planViewTitle"></h3>
+      <button class="btn btn-ghost btn-sm" @click="planViewOpen=false">✕</button>
+    </div>
+    <div class="md-content" x-html="md(planViewContent)"></div>
+  </div>
+</div>
+
+<script src="/static/js/api.js?v=3.4"></script>
+<script src="/static/js/app.js?v=3.6"></script>
+<script src="/static/js/hero.js?v=3.3"></script>
+<script src="/static/js/qa-canvas.js?v=3.3"></script>
+</body>
+</html>

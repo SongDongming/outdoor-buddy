@@ -1,0 +1,56 @@
+# Git
+.git/
+.gitignore
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Environment files (use Docker env vars)
+.env
+.env.local
+.env.production
+
+# Database files
+*.db
+*.db-journal
+*.db-wal
+
+# User uploads (mounted as volume, not baked into image)
+app/static/img/avatars/*
+app/static/img/uploads/*
+data/
+
+# Logs
+logs/*.log
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Claude
+.claude/
+
+# Documentation
+docs/
+*.md
+
+# Docker
+.dockerignore
+docker-compose.yml
+Dockerfile
+
+# Scripts (not needed at runtime)
+scripts/

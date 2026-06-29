@@ -1,0 +1,144 @@
+/**
+ * API 客户端 — v2.1
+ * 新增: 请求超时、AbortController、状态码、非JSON容错
+ */
+const API_BASE = '/api/v1';
+let authToken = localStorage.getItem('token') || '';
+const sessionId = localStorage.getItem('sessionId') || ('sess_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9));
+
+if (!localStorage.getItem('sessionId')) localStorage.setItem('sessionId', sessionId);
+
+function apiHeaders(){
+  const h = {'Content-Type':'application/json','X-Session-Id':sessionId};
+  if (authToken) h['Authorization'] = 'Bearer ' + authToken;
+  return h;
+}
+
+async function api(method, path, body=null, options={}){
+  const { timeout = 60000, retries = 0, signal: extSignal } = options;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  if (extSignal) extSignal.addEventListener('abort', () => controller.abort());
+
+  const opts = { method, headers: apiHeaders(), signal: controller.signal };
+  if (body) opts.body = JSON.stringify(body);
+
+  let lastError;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(API_BASE + path, opts);
+      clearTimeout(timeoutId);
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); }
+      catch { data = { detail: text || '服务器返回了无效数据' }; }
+      if (!res.ok) {
+        const err = new Error(data.detail || data.message || '请求失败');
+        err.status = res.status;
+        throw err;
+      }
+      return data;
+    } catch (e) {
+      lastError = e;
+      if (e.name === 'AbortError' && !extSignal?.aborted) {
+        lastError = new Error('请求超时，请检查网络连接');
+        lastError.status = 408;
+        break; // don't retry timeout
+      }
+      if (attempt < retries && e.status !== 401 && e.status !== 403 && e.status !== 404) {
+        await new Promise(r => setTimeout(r, 1000 * (attempt + 1)));
+      } else if (attempt < retries) {
+        break; // don't retry auth/permission errors
+      }
+    }
+  }
+  clearTimeout(timeoutId);
+  throw lastError;
+}
+
+const API = {
+  auth: {
+    register: (u,e,p) => api('POST','/auth/register',{username:u,email:e,password:p}),
+    login: (u,p) => api('POST','/auth/login',{username:u,password:p}),
+    me: () => api('GET','/auth/me'),
+    forgotPassword: (email) => api('POST','/auth/forgot-password',{email}),
+    resetPassword: (token, password) => api('POST','/auth/reset-password',{token,new_password:password}),
+    checkEmail: (email) => api('GET','/auth/check-email?email='+encodeURIComponent(email)),
+    uploadAvatar: async (file) => {
+      const fd = new FormData(); fd.append('file', file);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const opts = {method:'POST', headers:{}, body:fd, signal: controller.signal};
+      if (authToken) opts.headers['Authorization'] = 'Bearer '+authToken;
+      opts.headers['X-Session-Id'] = sessionId;
+      let res, data;
+      try {
+        res = await fetch(API_BASE+'/auth/avatar', opts);
+        data = await res.json();
+      } catch(e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') throw new Error('上传超时');
+        throw e;
+      }
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(data.detail || data.message || '上传失败');
+      return data;
+    },
+  },
+  route: { search: (kw) => api('POST','/routes/search',{keyword:kw}) },
+  equipment: {
+    search: (kw,cat) => api('POST','/equipment/search',{keyword:kw,category:cat}),
+    recommend: (p, opts) => api('POST','/equipment/recommend',p,opts),
+    categories: () => api('GET','/equipment/categories'),
+  },
+  ticket: { query: (f,t,d) => api('POST','/tickets/query',{from_city:f,to_city:t,date:d}) },
+  weather: { query: (l,d,w) => api('POST','/weather/query',{location:l,date:d,forecast_days:w||7}) },
+  plan: { generate: (r,w,u,t,opts) => api('POST','/plans/generate',{route_params:r,weather_data:w,user_params:u,ticket_data:t},opts) },
+  qa: { chat: (m) => api('POST','/qa/chat',{message:m}) },
+  favorite: {
+    add: (t,ti,c) => api('POST','/favorites/add',{fav_type:t,title:ti,content:c}),
+    list: (t) => api('GET','/favorites/list'+(t?'?fav_type='+t:'')),
+    delete: (id) => api('DELETE','/favorites/'+id),
+    export: (t,c) => api('POST','/favorites/export/'+t,{content:c}),
+  },
+  interact: { parse: (m) => api('POST','/interact/parse',{message:m}) },
+  forum: {
+    categories: () => api('GET','/forum/categories'),
+    listPosts: (catId, page) => {
+      let url = '/forum/posts?page=' + (page||1) + '&page_size=20';
+      if (catId) url += '&category_id=' + catId;
+      return api('GET', url);
+    },
+    getPost: (id) => api('GET',`/forum/posts/${id}`),
+    createPost: (data) => api('POST','/forum/posts',data),
+    createReply: (postId, data) => api('POST',`/forum/posts/${postId}/replies`,data),
+    deletePost: (id) => api('DELETE',`/forum/posts/${id}`),
+    deleteReply: (id) => api('DELETE',`/forum/replies/${id}`),
+    getReplies: (postId) => api('GET',`/forum/posts/${postId}/replies`),
+    uploadImage: async (file) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      const opts = { method: 'POST', headers: {}, body: formData, signal: controller.signal };
+      if (authToken) opts.headers['Authorization'] = 'Bearer ' + authToken;
+      opts.headers['X-Session-Id'] = sessionId;
+      let res, data;
+      try {
+        res = await fetch(API_BASE + '/forum/upload', opts);
+        data = await res.json();
+      } catch(e) {
+        clearTimeout(timeoutId);
+        if (e.name === 'AbortError') throw new Error('上传超时');
+        throw e;
+      }
+      clearTimeout(timeoutId);
+      if (!res.ok) throw new Error(data.detail || '上传失败');
+      return data;
+    },
+  },
+};
+
+function setToken(t){authToken=t;localStorage.setItem('token',t)}
+function clearToken(){authToken='';localStorage.removeItem('token')}
+function isLoggedIn(){return !!authToken}
