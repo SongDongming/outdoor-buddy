@@ -4,6 +4,7 @@
  */
 
 // ====== Markdown 渲染器（逐行解析版） ======
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function renderMarkdown(text) {
   if (!text) return '';
   const lines = text.split('\n');
@@ -155,7 +156,7 @@ document.addEventListener('alpine:init', () => {
     // Equipment
     equipKeyword: '', equipMode: 'light', equipDays: 3, equipSeason: '夏', equipResults: null,
     // Ticket
-    ticketFrom: '', ticketTo: '', ticketDate: new Date().toISOString().split('T')[0], ticketResults: null,
+    ticketFrom: '', ticketTo: '', ticketDate: new Date().toISOString().split('T')[0], ticketResults: null, ticketRowsHtml: '',
     // Weather
     weatherLocation: '', weatherResults: null,
     // Plan
@@ -417,9 +418,21 @@ document.addEventListener('alpine:init', () => {
       try {
         const res = await API.ticket.query(this.ticketFrom, this.ticketTo, this.ticketDate);
         this.ticketResults = res.data;
-        saveHistory({ type: 'ticket', title: `${this.ticketFrom} → ${this.ticketTo}`, summary: `${this.ticketDate} 找到 ${res.data.tickets?.length || 0} 个车次` });
+        const tickets = res.data.tickets || [];
+        const count = tickets.length;
+        const errMsg = res.data.error_msg || '';
+        if (errMsg && !count) {
+          this.toast(errMsg);
+        } else if (!count) {
+          this.toast('未找到车次，请检查城市名称或日期');
+        }
+        // 构建表格行 HTML（避免 <template x-for> 在 tbody 中的兼容问题）
+        this.ticketRowsHtml = tickets.map(t =>
+          `<tr><td class="train-no">${escHtml(t.train_no)}</td><td>${escHtml(t.departure_time)}</td><td>${escHtml(t.arrival_time)}</td><td>${escHtml(t.duration)}</td><td class="price">${escHtml(t.seat_types)}</td><td>${escHtml(t.status)}</td></tr>`
+        ).join('');
+        saveHistory({ type: 'ticket', title: `${this.ticketFrom} → ${this.ticketTo}`, summary: `${this.ticketDate} 找到 ${count} 个车次` });
         this.history = loadHistory();
-      } catch (e) { this.toast(e.message); }
+      } catch (e) { this.toast(e.message || '查询失败，请稍后重试'); }
       finally { this.loading.ticket = false; this.inFlight.queryTicket = false; }
     },
 

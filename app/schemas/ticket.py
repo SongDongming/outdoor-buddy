@@ -30,3 +30,4 @@ class TicketResult(BaseModel):
     tickets: list[TicketInfo] = Field(default_factory=list, description="车次列表")
     transfer_advice: str = Field(default="", description="到站接驳建议")
     travel_time_advice: str = Field(default="", description="推荐出行时段")
+    error_msg: str = Field(default="", description="错误信息，查询失败时返回")

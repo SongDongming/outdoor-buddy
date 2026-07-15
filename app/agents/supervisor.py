@@ -9,7 +9,7 @@ from langchain_core.messages import HumanMessage, SystemMessage
 from app.agents.base import AgentBase, create_llm
 from app.agents.route_agent import get_route_agent
 from app.agents.equipment_agent import get_equipment_agent
-from app.agents.ticket_agent import get_ticket_agent
+from app.services.ticket_service import query_tickets
 from app.agents.weather_agent import get_weather_agent
 from app.agents.plan_agent import get_plan_agent
 from app.agents.qa_agent import get_qa_agent
@@ -83,7 +83,7 @@ class SupervisorAgent(AgentBase):
                 elif module == "weather":
                     results["weather"] = await get_weather_agent().run(params.get("location", ""))
                 elif module == "ticket":
-                    results["ticket"] = await get_ticket_agent().run(params.get("from", ""), params.get("to", ""), params.get("date", ""))
+                    results["ticket"] = await query_tickets(params.get("from", ""), params.get("to", ""), params.get("date", ""))
                 elif module == "equipment":
                     results["equipment"] = await get_equipment_agent().run(params)
                 elif module == "plan":

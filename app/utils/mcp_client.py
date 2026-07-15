@@ -1,6 +1,10 @@
 """
 MCP 通用客户端模块
 支持 SSE 和 streamable_http 两种 MCP 传输协议，用于对接 12306 票务和天气查询服务
+
+MCP Streamable HTTP 协议流程 (2025-03-26):
+1. POST initialize → 服务端返回 mcp-session-id header
+2. 后续请求携带 mcp-session-id header
 """
 import json
 from typing import Any, Optional
@@ -18,7 +22,7 @@ def _mcp_http_client(timeout: float = 30.0) -> httpx.AsyncClient:
 
 
 class MCPClient:
-    """MCP 通用客户端，封装 JSON-RPC 2.0 协议"""
+    """MCP 通用客户端，封装 JSON-RPC 2.0 协议，支持 session 管理"""
 
     def __init__(self, service_type: str, service_url: str):
         """
@@ -29,10 +33,47 @@ class MCPClient:
         self.service_type = service_type
         self.service_url = service_url
         self._request_id = 0
+        self._session_id: Optional[str] = None
 
     def _next_id(self) -> int:
         self._request_id += 1
         return self._request_id
+
+    def _reset_session(self) -> None:
+        """重置 session，下次请求会重新初始化"""
+        self._session_id = None
+
+    async def _ensure_session(self) -> None:
+        """确保已建立 MCP session（仅 streamable_http 需要）"""
+        if self._session_id is not None or self.service_type != "streamable_http":
+            return
+
+        try:
+            async with _mcp_http_client(timeout=15.0) as client:
+                response = await client.post(
+                    self.service_url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": self._next_id(),
+                        "method": "initialize",
+                        "params": {
+                            "protocolVersion": "2025-03-26",
+                            "capabilities": {},
+                            "clientInfo": {"name": "outdoor-buddy", "version": "1.0.0"},
+                        },
+                    },
+                    headers={"Content-Type": "application/json"},
+                )
+                response.raise_for_status()
+                session_id = response.headers.get("mcp-session-id")
+                if session_id:
+                    self._session_id = session_id
+                    logger.info(f"MCP session 已建立: {session_id[:8]}...")
+                else:
+                    logger.warning("MCP 响应中未找到 mcp-session-id header")
+        except Exception as e:
+            logger.error(f"MCP session 初始化失败: {e}")
+            raise
 
     async def call_tool(self, tool_name: str, arguments: dict) -> dict:
         """
@@ -49,6 +90,46 @@ class MCPClient:
             return await self._call_streamable_http(tool_name, arguments)
         else:
             raise ValueError(f"不支持的 MCP 传输协议: {self.service_type}")
+
+    async def _call_streamable_http(self, tool_name: str, arguments: dict, _retry: bool = True) -> dict:
+        """通过 streamable_http 协议调用 MCP 工具，session 过期自动重试一次"""
+        await self._ensure_session()
+
+        request_payload = {
+            "jsonrpc": "2.0",
+            "id": self._next_id(),
+            "method": "tools/call",
+            "params": {
+                "name": tool_name,
+                "arguments": arguments,
+            },
+        }
+
+        headers = {"Content-Type": "application/json"}
+        if self._session_id:
+            headers["mcp-session-id"] = self._session_id
+
+        try:
+            async with _mcp_http_client(timeout=60.0) as client:
+                response = await client.post(
+                    self.service_url,
+                    json=request_payload,
+                    headers=headers,
+                )
+                # 400 通常是 session 过期，重置 session 并重试一次
+                if _retry and response.status_code == 400:
+                    logger.warning("MCP 返回 400，可能 session 过期，重新连接...")
+                    self._reset_session()
+                    return await self._call_streamable_http(tool_name, arguments, _retry=False)
+
+                response.raise_for_status()
+                return response.json()
+        except httpx.HTTPError as e:
+            logger.error(f"MCP streamable_http 调用失败 [{tool_name}]: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"MCP 调用异常 [{tool_name}]: {e}")
+            raise
 
     async def _call_sse(self, tool_name: str, arguments: dict) -> dict:
         """
@@ -91,50 +172,57 @@ class MCPClient:
             logger.warning(f"MCP 调用异常 [{tool_name}]: {e}")
             raise
 
-    async def _call_streamable_http(self, tool_name: str, arguments: dict) -> dict:
-        """
-        通过 streamable_http 协议调用 MCP 工具
-        """
-        request_payload = {
-            "jsonrpc": "2.0",
-            "id": self._next_id(),
-            "method": "tools/call",
-            "params": {
-                "name": tool_name,
-                "arguments": arguments,
-            },
-        }
-
-        try:
-            async with _mcp_http_client(timeout=30.0) as client:
-                response = await client.post(
-                    self.service_url,
-                    json=request_payload,
-                    headers={"Content-Type": "application/json"},
-                )
-                response.raise_for_status()
-                return response.json()
-        except httpx.HTTPError as e:
-            logger.error(f"MCP streamable_http 调用失败 [{tool_name}]: {e}")
-            raise
-        except Exception as e:
-            logger.error(f"MCP 调用异常 [{tool_name}]: {e}")
-            raise
-
     async def list_tools(self) -> list[dict]:
         """列出 MCP 服务提供的所有工具"""
-        request_payload = {
-            "jsonrpc": "2.0",
-            "id": self._next_id(),
-            "method": "tools/list",
-            "params": {},
-        }
+        if self.service_type == "streamable_http":
+            return await self._list_tools_streamable_http()
+        else:
+            return await self._list_tools_sse()
+
+    async def _list_tools_streamable_http(self, _retry: bool = True) -> list[dict]:
+        """通过 streamable_http 列出工具，session 过期自动重试一次"""
+        await self._ensure_session()
+
+        headers = {"Content-Type": "application/json"}
+        if self._session_id:
+            headers["mcp-session-id"] = self._session_id
 
         try:
             async with _mcp_http_client(timeout=15.0) as client:
                 response = await client.post(
                     self.service_url,
-                    json=request_payload,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": self._next_id(),
+                        "method": "tools/list",
+                        "params": {},
+                    },
+                    headers=headers,
+                )
+                if _retry and response.status_code == 400:
+                    logger.warning("list_tools 返回 400，可能 session 过期，重新连接...")
+                    self._reset_session()
+                    return await self._list_tools_streamable_http(_retry=False)
+
+                response.raise_for_status()
+                result = response.json()
+                return result.get("result", {}).get("tools", [])
+        except Exception as e:
+            logger.error(f"MCP 工具列表获取失败: {e}")
+            return []
+
+    async def _list_tools_sse(self) -> list[dict]:
+        """通过 SSE 列出工具"""
+        try:
+            async with _mcp_http_client(timeout=15.0) as client:
+                response = await client.post(
+                    self.service_url,
+                    json={
+                        "jsonrpc": "2.0",
+                        "id": self._next_id(),
+                        "method": "tools/list",
+                        "params": {},
+                    },
                     headers={"Content-Type": "application/json"},
                 )
                 response.raise_for_status()

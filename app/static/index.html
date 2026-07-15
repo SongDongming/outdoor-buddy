@@ -340,34 +340,21 @@
         <button class="btn btn-primary" style="margin-top:16px" @click="queryTicket()" :disabled="inFlight.queryTicket">查询车票</button>
       </div>
     </div>
-    <div x-show="loading.ticket" class="loading-pulse" style="padding:20px 40px">TicketAgent 查询中...</div>
+    <div x-show="loading.ticket" class="loading-pulse" style="padding:20px 40px">12306 查询中...</div>
     <div x-show="page==='ticket' && ticketResults && ticketResults.tickets && ticketResults.tickets.length > 0" style="padding:0 40px">
         <div class="card">
           <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
             <table class="ticket-table">
               <thead><tr><th>车次</th><th>出发</th><th>到达</th><th>历时</th><th>座位/票价</th><th>状态</th></tr></thead>
-              <tbody>
-                <template x-for="t in ticketResults.tickets" :key="t.train_no + t.departure_time">
-                  <tr>
-                    <td class="train-no" x-text="t.train_no"></td>
-                    <td x-text="t.departure_time"></td><td x-text="t.arrival_time"></td>
-                    <td x-text="t.duration"></td><td class="price" x-text="t.seat_types"></td>
-                    <td x-text="t.status"></td>
-                  </tr>
-                </template>
-              </tbody>
+              <tbody x-html="ticketRowsHtml"></tbody>
             </table>
           </div>
         </div>
-        <div class="card" x-show="ticketResults.transfer_advice" style="margin-top:12px">
-          <div class="card-title">接驳建议</div>
-          <div class="md-content" x-html="md(ticketResults.transfer_advice)"></div>
-        </div>
-      </div>
     </div>
     <div x-show="page==='ticket' && !ticketResults?.tickets?.length && !loading.ticket" class="empty-state">
       <div class="empty-icon">🚂</div>
       <h3>交通票务查询</h3>
+      <p x-show="ticketResults?.error_msg" style="color:var(--amber);margin-bottom:8px" x-text="ticketResults.error_msg"></p>
       <p>对接 12306 MCP 服务，输入出发城市、目的城市和出行日期，实时查询火车票信息</p>
     </div>
   </div>

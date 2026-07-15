@@ -3,7 +3,6 @@
 对接 12306 MCP 服务（SSE 协议），查询火车票信息
 """
 from app.utils.mcp_client import get_ticket_mcp_client
-from app.utils.llm_client import llm_chat
 from app.utils.logger import logger
 
 
@@ -25,102 +24,110 @@ async def query_tickets(from_city: str, to_city: str, date: str) -> dict:
 
     # 2. 调用票务查询工具
     tickets = []
+    error_msg = ""
     try:
-        tool_name = "search_tickets" if any("ticket" in t.get("name", "") for t in tools) else (tools[0]["name"] if tools else "search_tickets")
+        tool_name = "query-tickets" if any("query-ticket" in t.get("name", "") for t in tools) else (tools[0]["name"] if tools else "query-tickets")
         result = await ticket_client.call_tool(tool_name, {
-            "from": from_city,
-            "to": to_city,
-            "date": date,
+            "from_station": from_city,
+            "to_station": to_city,
+            "train_date": date,
         })
         tickets = _parse_ticket_result(result)
+        if not tickets:
+            error_msg = "未查询到符合条件车次，请尝试调整日期或城市"
     except Exception as e:
         logger.error(f"12306 MCP 调用失败: {e}")
-        tickets = _generate_fallback_tickets(from_city, to_city, date)
-
-    # 3. 大模型生成接驳建议和出行时段推荐
-    transfer_advice = ""
-    travel_time_advice = ""
-    if tickets:
-        try:
-            transfer_advice, travel_time_advice = await _generate_travel_advice(
-                from_city, to_city, date, tickets
-            )
-        except Exception as e:
-            logger.error(f"出行建议生成失败: {e}")
-            transfer_advice = "建议到达后使用当地公共交通或打车前往徒步起点。"
-            travel_time_advice = "建议选择上午出发的车次，预留充足时间到达目的地。"
+        error_msg = f"12306 票务服务当前不可用，请稍后重试"
 
     return {
         "from_city": from_city,
         "to_city": to_city,
         "date": date,
         "tickets": tickets,
-        "transfer_advice": transfer_advice,
-        "travel_time_advice": travel_time_advice,
+        "transfer_advice": "",
+        "travel_time_advice": "",
+        "error_msg": error_msg,
     }
 
 
 def _parse_ticket_result(result: dict) -> list[dict]:
-    """解析票务 MCP 返回结果"""
-    if "content" in result:
-        for item in result["content"]:
-            if isinstance(item, dict) and item.get("type") == "text":
-                import json
-                try:
-                    return json.loads(item.get("text", "[]"))
-                except json.JSONDecodeError:
-                    pass
+    """
+    解析票务 MCP 返回结果，统一为内部格式
 
-    if "tickets" in result:
-        return result["tickets"]
-
-    if isinstance(result, list):
-        return result
-
-    return []
-
-
-def _generate_fallback_tickets(from_city: str, to_city: str, date: str) -> list[dict]:
-    """生成备用票务数据（当 MCP 服务不可用时）"""
-    return [
-        {
-            "train_no": f"G{100 + i}",
-            "departure_time": f"{6 + i * 2:02d}:00",
-            "arrival_time": f"{10 + i * 2:02d}:30",
-            "duration": "4小时30分",
-            "seat_types": "二等座 ¥350 / 一等座 ¥560",
-            "status": "有票",
-        }
-        for i in range(3)
-    ]
-
-
-async def _generate_travel_advice(
-    from_city: str, to_city: str, date: str, tickets: list[dict]
-) -> tuple[str, str]:
-    """使用大模型生成出行建议"""
+    MCP JSON-RPC 响应结构:
+    {"jsonrpc": "2.0", "result": {"content": [{"type": "text", "text": "{...}"}]}}
+    或简化:
+    {"content": [{"type": "text", "text": "{...}"}]}
+    """
     import json
 
-    system_prompt = """你是火车出行顾问。根据车次信息，生成：
-1. **到站接驳建议**：到达目的地后如何前往徒步起点
-2. **推荐出行时段**：基于到达时间推荐最佳出行时段"""
+    # 先剥离 JSON-RPC 外层 result 字段
+    inner = result.get("result", result)
 
-    user_message = f"出发：{from_city} → 目的：{to_city}\n日期：{date}\n车次：\n{json.dumps(tickets, ensure_ascii=False)}"
+    raw_data = None
 
-    llm_result = await llm_chat(
-        messages=[{"role": "user", "content": user_message}],
-        system_prompt=system_prompt,
-        temperature=0.7,
-        max_tokens=2048,
-    )
+    # 1. MCP content 格式: {"content": [{"type": "text", "text": "{...}"}]}
+    if "content" in inner:
+        for item in inner["content"]:
+            if isinstance(item, dict) and item.get("type") == "text":
+                try:
+                    raw_data = json.loads(item.get("text", "{}"))
+                except json.JSONDecodeError:
+                    pass
+                break
 
-    # 分离接驳建议和时段推荐
-    if "出行时段" in llm_result or "推荐时段" in llm_result:
-        parts = llm_result.split("出行时段", 1) if "出行时段" in llm_result else llm_result.split("推荐时段", 1)
-        transfer = parts[0].strip()
-        travel_time = ("出行时段" + parts[1].strip()) if len(parts) > 1 else ""
-    else:
-        transfer = llm_result
-        travel_time = "建议选择上午出发的车次，预留充足时间。"
+    # 2. 内层直接就是数据
+    if raw_data is None and "trains" in inner:
+        raw_data = inner
 
-    return transfer, travel_time
+    # 3. 顶层 tickets 字段
+    if raw_data is None and "tickets" in result:
+        return result["tickets"]
+
+    # 4. 本身就是列表
+    if raw_data is None and isinstance(result, list):
+        return result
+
+    if raw_data is None:
+        return []
+
+    # 如果是列表，直接返回
+    if isinstance(raw_data, list):
+        return raw_data
+
+    # 提取 trains 列表（mcp-server-12306 格式: {"success": true, "trains": [...]}）
+    trains = raw_data.get("trains", [])
+    if not trains:
+        return []
+
+    # 转换 mcp-server-12306 格式 → 内部格式
+    parsed = []
+    for t in trains:
+        seats = t.get("seats", {})
+        seat_parts = []
+        seat_labels = {
+            "business": "商务座", "first_class": "一等座", "second_class": "二等座",
+            "soft_sleeper": "软卧", "hard_sleeper": "硬卧", "hard_seat": "硬座", "no_seat": "无座",
+        }
+        for key, label in seat_labels.items():
+            val = seats.get(key)
+            if val and val != "无":
+                seat_parts.append(f"{label} {val}")
+
+        has_tickets = any(v and v != "无" for v in seats.values())
+        status = "有票" if has_tickets else "售罄"
+
+        parsed.append({
+            "train_no": t.get("train_no", ""),
+            "from_station": t.get("from_station", ""),
+            "to_station": t.get("to_station", ""),
+            "departure_time": t.get("start_time", ""),
+            "arrival_time": t.get("arrive_time", ""),
+            "duration": t.get("duration", ""),
+            "seat_types": " / ".join(seat_parts) if seat_parts else "信息暂无",
+            "status": status,
+        })
+
+    return parsed
+
+

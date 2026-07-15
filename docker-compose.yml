@@ -34,6 +34,11 @@ services:
       - SMTP_PASSWORD=${SMTP_PASSWORD}
       - SMTP_FROM=${SMTP_FROM}
       - SMTP_USE_TLS=${SMTP_USE_TLS}
+      # MCP 服务配置
+      - MCP_12306_TYPE=streamable_http
+      - MCP_12306_URL=http://mcp-12306:8000/mcp
+      - MCP_WEATHER_TYPE=${MCP_WEATHER_TYPE:-streamable_http}
+      - MCP_WEATHER_URL=${MCP_WEATHER_URL}
     volumes:
       - storage_data:/app/data/storage
       - ./logs:/app/logs
@@ -56,6 +61,19 @@ services:
       timeout: 10s
       retries: 3
       start_period: 20s
+
+  mcp-12306:
+    image: drfccv/mcp-server-12306:latest
+    container_name: mcp-server-12306
+    ports:
+      - "8002:8000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "-X", "POST", "http://localhost:8000/mcp", "-H", "Content-Type: application/json", "-d", '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"healthcheck","version":"1.0"}}}']
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
 
   db:
     image: postgres:16-alpine
