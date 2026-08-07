@@ -65,7 +65,8 @@ class QAAgent(AgentBase):
             return {"safety_warning": safety.content, "step": "safety_checked"}
         return {"safety_warning": "", "step": "safety_checked"}
 
-    async def run(self, user_message: str, context: list[dict] = None) -> dict:
+    def _build_messages(self, user_message: str, context: list[dict] = None) -> list:
+        """构建对话消息列表（含历史上下文）"""
         messages = []
         if context:
             for msg in context:
@@ -76,6 +77,10 @@ class QAAgent(AgentBase):
                 elif role == "assistant":
                     messages.append(AIMessage(content=content))
         messages.append(HumanMessage(content=user_message))
+        return messages
+
+    async def run(self, user_message: str, context: list[dict] = None) -> dict:
+        messages = self._build_messages(user_message, context)
 
         compiled = self.compile()
         result = await compiled.ainvoke({"messages": messages})
@@ -83,6 +88,18 @@ class QAAgent(AgentBase):
             "answer": result.get("answer", ""),
             "safety_warning": result.get("safety_warning", ""),
         }
+
+    async def stream_run(self, user_message: str, context: list[dict] = None):
+        """
+        流式回答生成器（SSE）
+        逐 token 产出回答内容；流式模式跳过 safety_check 二次调用
+        （前端已有危险关键词客户端提示逻辑）
+        """
+        messages = self._add_system_message(self._build_messages(user_message, context))
+        async for chunk in self.llm.astream(messages):
+            content = getattr(chunk, "content", "")
+            if content:
+                yield content
 
 
 _qa_agent: Optional[QAAgent] = None

@@ -89,19 +89,25 @@ const API = {
   equipment: {
     search: (kw,cat) => api('POST','/equipment/search',{keyword:kw,category:cat}),
     recommend: (p, opts) => api('POST','/equipment/recommend',p,opts),
+    recommendStream: (p, onEvent) => streamEvent('/equipment/recommend', {...p, stream:true}, onEvent),
     categories: () => api('GET','/equipment/categories'),
   },
   ticket: { query: (f,t,d) => api('POST','/tickets/query',{from_city:f,to_city:t,date:d}) },
   weather: { query: (l,d,w) => api('POST','/weather/query',{location:l,date:d,forecast_days:w||7}) },
-  plan: { generate: (r,w,u,t,opts) => api('POST','/plans/generate',{route_params:r,weather_data:w,user_params:u,ticket_data:t},opts) },
-  qa: { chat: (m) => api('POST','/qa/chat',{message:m}) },
+  plan: {
+    generate: (r,w,u,t,opts) => api('POST','/plans/generate',{route_params:r,weather_data:w,user_params:u,ticket_data:t},opts),
+    generateStream: (r,w,u,t,onEvent) => streamEvent('/plans/generate',{route_params:r,weather_data:w,user_params:u,ticket_data:t,stream:true},onEvent),
+  },
+  qa: {
+    chat: (m) => api('POST','/qa/chat',{message:m}),
+    chatStream: (m, onEvent) => streamEvent('/qa/chat',{message:m,stream:true},onEvent),
+  },
   favorite: {
     add: (t,ti,c) => api('POST','/favorites/add',{fav_type:t,title:ti,content:c}),
     list: (t) => api('GET','/favorites/list'+(t?'?fav_type='+t:'')),
     delete: (id) => api('DELETE','/favorites/'+id),
     export: (t,c) => api('POST','/favorites/export/'+t,{content:c}),
   },
-  interact: { parse: (m) => api('POST','/interact/parse',{message:m}) },
   forum: {
     categories: () => api('GET','/forum/categories'),
     listPosts: (catId, page) => {
@@ -115,6 +121,10 @@ const API = {
     deletePost: (id) => api('DELETE',`/forum/posts/${id}`),
     deleteReply: (id) => api('DELETE',`/forum/replies/${id}`),
     getReplies: (postId) => api('GET',`/forum/posts/${postId}/replies`),
+    likeReply: (id) => api('POST',`/forum/replies/${id}/like`),
+    pinPost: (id) => api('POST',`/forum/posts/${id}/pin`),
+    createCategory: (data) => api('POST','/forum/categories',data),
+    deleteCategory: (id) => api('DELETE',`/forum/categories/${id}`),
     uploadImage: async (file) => {
       const formData = new FormData();
       formData.append('file', file);
@@ -142,3 +152,43 @@ const API = {
 function setToken(t){authToken=t;localStorage.setItem('token',t)}
 function clearToken(){authToken='';localStorage.removeItem('token')}
 function isLoggedIn(){return !!authToken}
+
+// ====== SSE 流式消费器 ======
+async function streamEvent(path, body, onEvent, timeout = 180000){
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+  try {
+    const res = await fetch(API_BASE + path, {
+      method: 'POST', headers: apiHeaders(), body: JSON.stringify(body), signal: controller.signal
+    });
+    if (!res.ok) {
+      const text = await res.text();
+      let data;
+      try { data = JSON.parse(text); } catch { data = {}; }
+      throw new Error(data.detail || data.message || text || '请求失败');
+    }
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf('\n\n')) !== -1) {
+        const chunk = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        const line = chunk.split('\n').find(l => l.trim().startsWith('data:'));
+        if (!line) continue;
+        const data = line.slice(5).trim();
+        if (data === '[DONE]') return;
+        try { onEvent(JSON.parse(data)); } catch (e) { /* 忽略无法解析的事件 */ }
+      }
+    }
+  } catch (e) {
+    if (e.name === 'AbortError') throw new Error('请求超时，请检查网络连接');
+    throw e;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}

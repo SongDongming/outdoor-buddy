@@ -8,17 +8,67 @@ from sqlalchemy import select, func, desc
 from sqlalchemy.orm import selectinload
 from app.models.database import get_db
 from app.models.user import User
-from app.models.forum import ForumCategory, ForumPost, ForumReply
-from app.api.dependencies import get_current_user, get_optional_user
+from app.models.forum import ForumCategory, ForumPost, ForumReply, ForumReplyLike
+from app.api.dependencies import get_current_user, get_optional_user, get_current_admin
 from app.schemas.forum import (
     ForumCategoryOut, ForumPostOut, ForumPostListItem, ForumPostListOut, ForumPostCreate,
-    ForumReplyOut, ForumReplyCreate,
+    ForumReplyOut, ForumReplyCreate, ForumCategoryCreate,
 )
 from app.schemas.common import ApiResponse
 from app.utils.logger import logger
 from app.services.storage_service import get_storage
 
 router = APIRouter(prefix="/api/v1/forum", tags=["论坛"])
+
+
+def _build_reply_tree(replies: list[ForumReply], liked_ids: set = None) -> list[dict]:
+    """把扁平回复列表构建成嵌套树（parent_id → children），顶层回复在前"""
+    liked_ids = liked_ids or set()
+    by_id = {}
+    for r in replies:
+        d = ForumReplyOut.model_validate(r).model_dump()
+        d["author_name"] = r.author.username if r.author else "未知"
+        d["author_avatar_url"] = r.author.avatar_url if r.author else None
+        d["like_count"] = r.like_count or 0
+        d["liked"] = r.id in liked_ids
+        d["children"] = []
+        by_id[r.id] = d
+
+    roots = []
+    for r in replies:
+        d = by_id[r.id]
+        parent_id = r.parent_id
+        if parent_id and parent_id in by_id:
+            d["reply_to_name"] = by_id[parent_id].get("author_name")
+            by_id[parent_id]["children"].append(d)
+        else:
+            roots.append(d)
+    return roots
+
+
+async def _get_liked_reply_ids(db: AsyncSession, user_id: int | None, reply_ids: list[int]) -> set:
+    """查询当前用户点赞过的回复 id 集合"""
+    if not user_id or not reply_ids:
+        return set()
+    result = await db.execute(
+        select(ForumReplyLike.reply_id).where(
+            ForumReplyLike.user_id == user_id,
+            ForumReplyLike.reply_id.in_(reply_ids),
+        )
+    )
+    return set(result.scalars().all())
+
+
+async def _collect_reply_ids(db: AsyncSession, reply_id: int) -> list[int]:
+    """收集某回复及其所有子孙回复的 id（BFS）"""
+    ids = [reply_id]
+    frontier = [reply_id]
+    while frontier:
+        result = await db.execute(select(ForumReply.id).where(ForumReply.parent_id.in_(frontier)))
+        children = list(result.scalars().all())
+        ids.extend(children)
+        frontier = children
+    return ids
 
 
 # ====== 分类 ======
@@ -127,12 +177,9 @@ async def get_post(
     d["author_name"] = post.author.username if post.author else "未知"
     d["author_avatar_url"] = post.author.avatar_url if post.author else None
     d["category_name"] = post.category.name if post.category else "未分类"
-    d["replies"] = []
-    for r in post.replies:
-        rd = ForumReplyOut.model_validate(r).model_dump()
-        rd["author_name"] = r.author.username if r.author else "未知"
-        rd["author_avatar_url"] = r.author.avatar_url if r.author else None
-        d["replies"].append(rd)
+    reply_ids = [r.id for r in post.replies]
+    liked_ids = await _get_liked_reply_ids(db, current_user.id if current_user else None, reply_ids)
+    d["replies"] = _build_reply_tree(list(post.replies), liked_ids)
 
     return ApiResponse(code=200, message="success", data=d)
 
@@ -174,8 +221,17 @@ async def create_reply(
     if not post:
         raise HTTPException(status_code=404, detail="帖子不存在")
 
+    # 嵌套回复：校验父回复存在且属于同一帖子
+    parent_id = req.parent_id
+    if parent_id is not None:
+        parent_result = await db.execute(select(ForumReply).where(ForumReply.id == parent_id))
+        parent = parent_result.scalar_one_or_none()
+        if not parent or parent.post_id != post_id:
+            raise HTTPException(status_code=400, detail="父回复不存在或不属于该帖子")
+
     reply = ForumReply(
-        content=req.content, post_id=post_id, author_id=current_user.id, images=req.images
+        content=req.content, post_id=post_id, author_id=current_user.id,
+        images=req.images, parent_id=parent_id,
     )
     db.add(reply)
     post.reply_count = (post.reply_count or 0) + 1
@@ -183,6 +239,9 @@ async def create_reply(
     await db.refresh(reply)
     d = ForumReplyOut.model_validate(reply).model_dump()
     d["author_name"] = current_user.username
+    d["author_avatar_url"] = current_user.avatar_url
+    if parent_id is not None:
+        d["reply_to_name"] = parent.author.username if parent.author else "未知"
     return ApiResponse(code=201, message="回复成功", data=d)
 
 
@@ -200,12 +259,9 @@ async def get_replies(
         .order_by(ForumReply.created_at)
     )
     replies = result.scalars().all()
-    reply_list = []
-    for r in replies:
-        d = ForumReplyOut.model_validate(r).model_dump()
-        d["author_name"] = r.author.username if r.author else "未知"
-        d["author_avatar_url"] = r.author.avatar_url if r.author else None
-        reply_list.append(d)
+    reply_ids = [r.id for r in replies]
+    liked_ids = await _get_liked_reply_ids(db, current_user.id if current_user else None, reply_ids)
+    reply_list = _build_reply_tree(list(replies), liked_ids)
     return ApiResponse(code=200, message="success", data={"replies": reply_list})
 
 
@@ -272,24 +328,142 @@ async def delete_reply(
     if reply.author_id != current_user.id and current_user.role != "admin":
         raise HTTPException(status_code=403, detail="无权删除")
 
-    # 清理回复中的图片文件
-    storage = get_storage()
-    if reply.images:
-        for img_url in reply.images:
-            try:
-                await storage.delete_by_url(img_url)
-            except Exception as e:
-                logger.warning(f"删除回复图片失败: {img_url} — {e}")
+    # 收集该回复及其所有子孙回复
+    reply_ids = await _collect_reply_ids(db, reply_id)
+    all_result = await db.execute(select(ForumReply).where(ForumReply.id.in_(reply_ids)))
+    all_replies = all_result.scalars().all()
 
-    # 更新帖子的回复计数
+    # 清理所有相关回复的图片文件
+    storage = get_storage()
+    for r in all_replies:
+        if r.images:
+            for img_url in r.images:
+                try:
+                    await storage.delete_by_url(img_url)
+                except Exception as e:
+                    logger.warning(f"删除回复图片失败: {img_url} — {e}")
+
+    # 递归删除（含子孙）
+    for r in all_replies:
+        await db.delete(r)
+
+    # 更新帖子的回复计数（减去实际删除条数）
     post_result = await db.execute(select(ForumPost).where(ForumPost.id == reply.post_id))
     post = post_result.scalar_one_or_none()
     if post:
-        post.reply_count = max(0, (post.reply_count or 0) - 1)
+        post.reply_count = max(0, (post.reply_count or 0) - len(reply_ids))
 
-    await db.delete(reply)
     await db.commit()
     return ApiResponse(code=200, message="删除成功", data=None)
+
+
+# ====== 回复点赞/取消点赞 ======
+@router.post("/replies/{reply_id}/like", response_model=ApiResponse)
+async def like_reply(
+    reply_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """点赞 / 取消点赞回复（同一用户对同一回复只能点赞一次，再点取消）"""
+    result = await db.execute(select(ForumReply).where(ForumReply.id == reply_id))
+    reply = result.scalar_one_or_none()
+    if not reply:
+        raise HTTPException(status_code=404, detail="回复不存在")
+
+    like_result = await db.execute(
+        select(ForumReplyLike).where(
+            ForumReplyLike.reply_id == reply_id,
+            ForumReplyLike.user_id == current_user.id,
+        )
+    )
+    like = like_result.scalar_one_or_none()
+
+    if like:
+        await db.delete(like)
+        reply.like_count = max(0, (reply.like_count or 0) - 1)
+        liked = False
+    else:
+        db.add(ForumReplyLike(reply_id=reply_id, user_id=current_user.id))
+        reply.like_count = (reply.like_count or 0) + 1
+        liked = True
+
+    await db.commit()
+    return ApiResponse(
+        code=200,
+        message="点赞成功" if liked else "已取消点赞",
+        data={"liked": liked, "like_count": reply.like_count or 0},
+    )
+
+
+# ====== 置顶帖子（admin） ======
+@router.post("/posts/{post_id}/pin", response_model=ApiResponse)
+async def toggle_pin_post(
+    post_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """置顶 / 取消置顶帖子（仅管理员）"""
+    result = await db.execute(select(ForumPost).options(selectinload(ForumPost.author), selectinload(ForumPost.category)).where(ForumPost.id == post_id))
+    post = result.scalar_one_or_none()
+    if not post:
+        raise HTTPException(status_code=404, detail="帖子不存在")
+
+    post.is_pinned = not post.is_pinned
+    await db.commit()
+    await db.refresh(post)
+
+    d = ForumPostListItem.model_validate(post).model_dump()
+    d["author_name"] = post.author.username if post.author else "未知"
+    d["author_avatar_url"] = post.author.avatar_url if post.author else None
+    d["category_name"] = post.category.name if post.category else "未分类"
+    return ApiResponse(code=200, message="置顶成功" if post.is_pinned else "已取消置顶", data=d)
+
+
+# ====== 分类管理（admin） ======
+@router.post("/categories", response_model=ApiResponse, status_code=201)
+async def create_category(
+    req: ForumCategoryCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """新增分类（仅管理员）"""
+    slug = (req.slug or req.name).strip().lower().replace(" ", "-")
+    if not slug:
+        raise HTTPException(status_code=400, detail="分类名称不能为空")
+
+    # slug 冲突检查
+    result = await db.execute(select(ForumCategory).where(ForumCategory.slug == slug))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="分类标识已存在")
+
+    # 最大排序号
+    max_sort = (await db.execute(select(func.max(ForumCategory.sort_order)))).scalar() or 0
+    cat = ForumCategory(name=req.name, slug=slug, description=req.description, sort_order=max_sort + 1)
+    db.add(cat)
+    await db.commit()
+    await db.refresh(cat)
+    return ApiResponse(code=201, message="分类创建成功", data=ForumCategoryOut.model_validate(cat).model_dump())
+
+
+@router.delete("/categories/{category_id}", response_model=ApiResponse)
+async def delete_category(
+    category_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_admin),
+):
+    """删除分类（仅管理员；分类下有帖子则拒绝）"""
+    result = await db.execute(select(ForumCategory).where(ForumCategory.id == category_id))
+    cat = result.scalar_one_or_none()
+    if not cat:
+        raise HTTPException(status_code=404, detail="分类不存在")
+
+    post_count = (await db.execute(select(func.count(ForumPost.id)).where(ForumPost.category_id == category_id))).scalar() or 0
+    if post_count > 0:
+        raise HTTPException(status_code=400, detail=f"该分类下还有 {post_count} 个帖子，请先迁移或删除")
+
+    await db.delete(cat)
+    await db.commit()
+    return ApiResponse(code=200, message="分类已删除", data=None)
 
 
 # ====== 图片上传 ======

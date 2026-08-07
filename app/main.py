@@ -9,12 +9,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from app.core.config import get_settings
-from app.models.database import init_db, close_db, is_db_available
+from app.models.database import init_db, close_db, is_db_available, ensure_forum_reply_parent_column, ensure_forum_reply_like_column, ensure_user_columns
 from app.utils.logger import logger
 
 # 导入所有路由模块
-from app.api import auth, routes, qa, equipment, tickets, weather, plans, favorites, global_interaction, forum
+from app.api import auth, routes, qa, equipment, tickets, weather, plans, favorites, forum
 from app.services.storage_service import get_storage
+from app.utils.redis_client import init_redis, close_redis
 
 settings = get_settings()
 
@@ -30,13 +31,40 @@ async def lifespan(app: FastAPI):
         logger.error(f"[ERROR] 数据库初始化失败: {e}")
         print(f"[ERROR] DB init failed: {e}")
     try:
+        # 幂等迁移：补 forum_replies.parent_id / like_count 列 + users 缺失列
+        await ensure_forum_reply_parent_column()
+        await ensure_forum_reply_like_column()
+        await ensure_user_columns()
+        print("[OK] 数据库迁移检查完成")
+    except Exception as e:
+        logger.warning(f"[WARN] 数据库迁移失败: {e}")
+        print(f"[WARN] Migration failed: {e}")
+    try:
+        # 确保超管账号存在（幂等）
+        # 注意: 须在 init_db 之后导入，才能拿到切换后的当前引擎会话工厂
+        from app.models.database import async_session_factory
+        async with async_session_factory() as session:
+            from app.services.admin_service import ensure_admin_user
+            await ensure_admin_user(session)
+        print("[OK] 超管账号检查完成")
+        logger.info("[OK] 超管账号检查完成")
+    except Exception as e:
+        logger.error(f"[ERROR] 超管账号初始化失败: {e}")
+        print(f"[ERROR] Admin init failed: {e}")
+    try:
         storage = get_storage()
         logger.info(f"[OK] 存储后端: {storage.__class__.__name__}")
         print(f"[OK] 存储后端: {storage.__class__.__name__}")
     except Exception as e:
         logger.error(f"[ERROR] 存储后端初始化失败: {e}")
         print(f"[ERROR] Storage init failed: {e}")
+    try:
+        await init_redis()
+    except Exception as e:
+        logger.warning(f"[WARN] Redis 初始化失败: {e}")
+        print(f"[WARN] Redis init failed: {e}")
     yield
+    await close_redis()
     await close_db()
     print("[STOP] 应用已关闭")
     logger.info("[STOP] 应用已关闭")
@@ -80,7 +108,6 @@ app.include_router(tickets.router)
 app.include_router(weather.router)
 app.include_router(plans.router)
 app.include_router(favorites.router)
-app.include_router(global_interaction.router)
 app.include_router(forum.router)
 
 # 静态文件服务

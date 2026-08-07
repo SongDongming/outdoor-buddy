@@ -102,6 +102,70 @@ async def init_db() -> None:
         raise
 
 
+async def ensure_forum_reply_parent_column() -> None:
+    """
+    幂等迁移：为 forum_replies 表补充 parent_id 列（嵌套回复）
+    PostgreSQL 用 IF NOT EXISTS；SQLite 不支持该语法，用 try/except 忽略重复列
+    """
+    from sqlalchemy import text
+    engine = _get_engine()
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS parent_id INTEGER"))
+        logger.info("[MIGRATE] forum_replies.parent_id 就绪")
+        return
+    except Exception:
+        pass
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE forum_replies ADD COLUMN parent_id INTEGER"))
+        logger.info("[MIGRATE] forum_replies.parent_id 就绪")
+    except Exception as e:
+        logger.warning(f"[MIGRATE] forum_replies.parent_id 迁移跳过（可能已存在）: {e}")
+
+
+async def ensure_user_columns() -> None:
+    """
+    幂等迁移：为 users 表补充当前模型缺失的列（兼容旧 schema 的数据库）
+    仅补充列，不修改已有数据
+    """
+    from sqlalchemy import text
+    engine = _get_engine()
+    additions = [
+        ("email", "VARCHAR(255)"),
+        ("email_verified", "BOOLEAN DEFAULT false"),
+        ("reset_token", "VARCHAR(255)"),
+        ("reset_token_expires", "TIMESTAMP WITH TIME ZONE"),
+    ]
+    for name, ddl in additions:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"ALTER TABLE users ADD COLUMN {name} {ddl}"))
+            logger.info(f"[MIGRATE] users.{name} 已补充")
+        except Exception:
+            # 列已存在或语法不支持时跳过
+            logger.debug(f"[MIGRATE] users.{name} 已存在，跳过")
+
+
+async def ensure_forum_reply_like_column() -> None:
+    """幂等迁移：为 forum_replies 表补充 like_count 列（评论点赞）"""
+    from sqlalchemy import text
+    engine = _get_engine()
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE forum_replies ADD COLUMN IF NOT EXISTS like_count INTEGER DEFAULT 0"))
+        logger.info("[MIGRATE] forum_replies.like_count 就绪")
+        return
+    except Exception:
+        pass
+    try:
+        async with engine.begin() as conn:
+            await conn.execute(text("ALTER TABLE forum_replies ADD COLUMN like_count INTEGER DEFAULT 0"))
+        logger.info("[MIGRATE] forum_replies.like_count 就绪")
+    except Exception as e:
+        logger.warning(f"[MIGRATE] forum_replies.like_count 迁移跳过: {e}")
+
+
 async def close_db() -> None:
     """关闭数据库连接"""
     if _engine:

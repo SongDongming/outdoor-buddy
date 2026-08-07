@@ -1,6 +1,6 @@
 """
 MCP 通用客户端模块
-支持 SSE 和 streamable_http 两种 MCP 传输协议，用于对接 12306 票务和天气查询服务
+支持 SSE 和 streamable_http 两种 MCP 传输协议，用于对接 12306 票务查询服务
 
 MCP Streamable HTTP 协议流程 (2025-03-26):
 1. POST initialize → 服务端返回 mcp-session-id header
@@ -253,7 +253,6 @@ class MCPClient:
 
 # 全局 MCP 客户端单例
 _ticket_client: Optional[MCPClient] = None
-_weather_client: Optional[MCPClient] = None
 
 
 def get_ticket_mcp_client() -> MCPClient:
@@ -266,15 +265,3 @@ def get_ticket_mcp_client() -> MCPClient:
         )
         logger.info("12306 MCP 客户端初始化完成")
     return _ticket_client
-
-
-def get_weather_mcp_client() -> MCPClient:
-    """获取天气 MCP 客户端"""
-    global _weather_client
-    if _weather_client is None:
-        _weather_client = MCPClient(
-            service_type=settings.mcp_weather_type,
-            service_url=settings.mcp_weather_url,
-        )
-        logger.info("天气 MCP 客户端初始化完成")
-    return _weather_client

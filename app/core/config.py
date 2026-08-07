@@ -26,10 +26,8 @@ class Settings(BaseSettings):
     no_proxy: str = ""
 
     # MCP 服务配置
-    mcp_12306_type: str = "sse"
-    mcp_12306_url: str = "https://mcp.api-inference.modelscope.net/a1736485151849/sse"
-    mcp_weather_type: str = "streamable_http"
-    mcp_weather_url: str = "https://mcp.api-inference.modelscope.net/60bdf046360440/mcp"
+    mcp_12306_type: str = "streamable_http"
+    mcp_12306_url: str = "http://localhost:8002/mcp"
 
     # 对象存储配置
     storage_backend: str = "local"  # "local" 或 "minio"
@@ -40,6 +38,13 @@ class Settings(BaseSettings):
     minio_secure: bool = False
     minio_external_url: str = "http://localhost:9000"  # 浏览器可访问的 URL
     minio_buckets: str = "avatars,uploads"  # 逗号分隔的 bucket 名称
+
+    # Redis 配置（不可用时自动降级到 DB/内存缓存）
+    redis_url: str = "redis://localhost:6379/0"
+
+    # 超管账号配置
+    super_admin_username: str = "admin"
+    super_admin_password: str = "admin123"
 
     # 应用配置
     app_name: str = "户外徒步助手"

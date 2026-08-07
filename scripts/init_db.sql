@@ -35,23 +35,7 @@ CREATE INDEX IF NOT EXISTS idx_route_cache_keyword ON route_cache(keyword);
 CREATE INDEX IF NOT EXISTS idx_route_cache_expires ON route_cache(expires_at);
 
 -- ============================================
--- 3. 装备缓存表
--- ============================================
-CREATE TABLE IF NOT EXISTS equipment_cache (
-    id SERIAL PRIMARY KEY,
-    keyword VARCHAR(200) NOT NULL,
-    category VARCHAR(50),
-    equipment_data JSONB NOT NULL,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    expires_at TIMESTAMP WITH TIME ZONE NOT NULL
-);
-
-CREATE INDEX IF NOT EXISTS idx_equipment_cache_keyword ON equipment_cache(keyword);
-CREATE INDEX IF NOT EXISTS idx_equipment_cache_category ON equipment_cache(category);
-CREATE INDEX IF NOT EXISTS idx_equipment_cache_expires ON equipment_cache(expires_at);
-
--- ============================================
--- 4. 收藏表
+-- 3. 收藏表
 -- ============================================
 CREATE TABLE IF NOT EXISTS favorites (
     id SERIAL PRIMARY KEY,
@@ -67,23 +51,7 @@ CREATE INDEX IF NOT EXISTS idx_favorites_type ON favorites(fav_type);
 CREATE INDEX IF NOT EXISTS idx_favorites_user_type ON favorites(user_id, fav_type);
 
 -- ============================================
--- 5. 查询历史表
--- ============================================
-CREATE TABLE IF NOT EXISTS query_history (
-    id SERIAL PRIMARY KEY,
-    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
-    query_type VARCHAR(30) NOT NULL CHECK (query_type IN ('route', 'equipment', 'ticket', 'weather', 'plan', 'qa')),
-    query_params JSONB NOT NULL,
-    query_result_summary TEXT,
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
-CREATE INDEX IF NOT EXISTS idx_query_history_user_id ON query_history(user_id);
-CREATE INDEX IF NOT EXISTS idx_query_history_type ON query_history(query_type);
-CREATE INDEX IF NOT EXISTS idx_query_history_created ON query_history(created_at DESC);
-
--- ============================================
--- 6. 行程预案表
+-- 4. 行程预案表
 -- ============================================
 CREATE TABLE IF NOT EXISTS trip_plans (
     id SERIAL PRIMARY KEY,
@@ -97,7 +65,7 @@ CREATE TABLE IF NOT EXISTS trip_plans (
 CREATE INDEX IF NOT EXISTS idx_trip_plans_user_id ON trip_plans(user_id);
 
 -- ============================================
--- 7. 会话上下文表
+-- 5. 会话上下文表
 -- ============================================
 CREATE TABLE IF NOT EXISTS session_contexts (
     id SERIAL PRIMARY KEY,
@@ -118,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_session_contexts_updated ON session_contexts(upda
 -- ('admin', '$2b$12$LJ3m4ys3GZfnYMz8kVsKaOTS0mGynsFPk5BdKQJqNt4GtfXxDmHGi', 'admin');
 
 -- ============================================
--- 8. 论坛分类表
+-- 6. 论坛分类表
 -- ============================================
 CREATE TABLE IF NOT EXISTS forum_categories (
     id SERIAL PRIMARY KEY,
@@ -130,7 +98,7 @@ CREATE TABLE IF NOT EXISTS forum_categories (
 );
 
 -- ============================================
--- 9. 论坛帖子表
+-- 7. 论坛帖子表
 -- ============================================
 CREATE TABLE IF NOT EXISTS forum_posts (
     id SERIAL PRIMARY KEY,
@@ -151,18 +119,35 @@ CREATE INDEX IF NOT EXISTS idx_forum_posts_author ON forum_posts(author_id);
 CREATE INDEX IF NOT EXISTS idx_forum_posts_created ON forum_posts(created_at DESC);
 
 -- ============================================
--- 10. 论坛回复表
+-- 8. 论坛回复表
 -- ============================================
 CREATE TABLE IF NOT EXISTS forum_replies (
     id SERIAL PRIMARY KEY,
     content TEXT NOT NULL,
     post_id INT REFERENCES forum_posts(id) ON DELETE CASCADE,
     author_id INT REFERENCES users(id),
+    parent_id INT REFERENCES forum_replies(id) ON DELETE CASCADE,
+    like_count INT DEFAULT 0,
     images JSONB DEFAULT '[]',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
 CREATE INDEX IF NOT EXISTS idx_forum_replies_post ON forum_replies(post_id);
+CREATE INDEX IF NOT EXISTS idx_forum_replies_parent ON forum_replies(parent_id);
+
+-- ============================================
+-- 8b. 论坛回复点赞表
+-- ============================================
+CREATE TABLE IF NOT EXISTS forum_reply_likes (
+    id SERIAL PRIMARY KEY,
+    reply_id INT NOT NULL REFERENCES forum_replies(id) ON DELETE CASCADE,
+    user_id INT NOT NULL REFERENCES users(id),
+    created_at TIMESTAMP DEFAULT NOW(),
+    UNIQUE (reply_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_reply_likes_reply ON forum_reply_likes(reply_id);
+CREATE INDEX IF NOT EXISTS idx_reply_likes_user ON forum_reply_likes(user_id);
 
 -- ============================================
 -- 插入默认论坛分类

@@ -49,3 +49,6 @@ docs/
 
 # Docker
 docker_volumes/
+
+# Docker 镜像导出（部署产物）
+*.tar

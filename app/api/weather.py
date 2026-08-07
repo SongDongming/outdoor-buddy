@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.models.user import User
-from app.api.dependencies import get_optional_user
+from app.api.dependencies import get_optional_user, rate_limited
 from app.schemas.weather import WeatherQueryRequest
 from app.schemas.common import ApiResponse
 from app.agents.weather_agent import get_weather_agent
@@ -13,7 +13,7 @@ router = APIRouter(prefix="/api/v1/weather", tags=["天气查询"])
 
 
 @router.post("/query", response_model=ApiResponse)
-async def query_weather_api(req: WeatherQueryRequest, db: AsyncSession = Depends(get_db), current_user: User | None = Depends(get_optional_user)):
+async def query_weather_api(req: WeatherQueryRequest, db: AsyncSession = Depends(get_db), current_user: User | None = Depends(get_optional_user), _rl: None = Depends(rate_limited(10, 60))):
     """查询天气"""
     print(f"[WEATHER] 查询: {req.location}")
     try:

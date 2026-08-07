@@ -5,7 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.database import get_db
 from app.models.user import User
-from app.api.dependencies import get_optional_user
+from app.api.dependencies import get_optional_user, rate_limited
 from app.schemas.route import RouteSearchRequest
 from app.schemas.common import ApiResponse
 from app.agents.route_agent import get_route_agent
@@ -20,6 +20,7 @@ async def search_routes_api(
     req: RouteSearchRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User | None = Depends(get_optional_user),
+    _rl: None = Depends(rate_limited(10, 60)),
 ):
     """搜索徒步路线 — LangGraph RouteAgent"""
     print(f"[ROUTE] 搜索: {req.keyword}")

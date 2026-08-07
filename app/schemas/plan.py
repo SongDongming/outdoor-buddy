@@ -11,6 +11,7 @@ class PlanGenerateRequest(BaseModel):
     weather_data: Optional[dict] = Field(default=None, description="天气数据")
     ticket_data: Optional[dict] = Field(default=None, description="交通票务数据")
     user_params: Optional[dict] = Field(default=None, description="用户个性化参数")
+    stream: bool = Field(default=False, description="是否 SSE 流式输出")
 
 
 class PlanGenerateResult(BaseModel):

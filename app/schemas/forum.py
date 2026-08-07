@@ -22,7 +22,12 @@ class ForumReplyOut(BaseModel):
     post_id: int
     author_id: int
     author_name: Optional[str] = None
+    author_avatar_url: Optional[str] = None
     images: List[str] = []
+    parent_id: Optional[int] = None
+    reply_to_name: Optional[str] = None
+    like_count: int = 0
+    liked: bool = False
     created_at: datetime
     class Config: from_attributes = True
 
@@ -80,3 +85,10 @@ class ForumPostCreate(BaseModel):
 class ForumReplyCreate(BaseModel):
     content: str = Field(..., min_length=1)
     images: List[str] = []
+    parent_id: Optional[int] = Field(default=None, description="父回复 ID（嵌套回复时指定，顶层回复为空）")
+
+
+class ForumCategoryCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=50, description="分类名称")
+    slug: Optional[str] = Field(default=None, max_length=50, description="唯一标识，不传则自动生成")
+    description: Optional[str] = Field(default=None, max_length=200)

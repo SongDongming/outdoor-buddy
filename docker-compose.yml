@@ -37,13 +37,14 @@ services:
       # MCP 服务配置
       - MCP_12306_TYPE=streamable_http
       - MCP_12306_URL=http://mcp-12306:8000/mcp
-      - MCP_WEATHER_TYPE=${MCP_WEATHER_TYPE:-streamable_http}
-      - MCP_WEATHER_URL=${MCP_WEATHER_URL}
+      # Redis 配置
+      - REDIS_URL=redis://redis:6379/0
     volumes:
       - storage_data:/app/data/storage
       - ./logs:/app/logs
       # 开发模式：挂载代码目录，修改即时生效（无需重建镜像）
       - ./app/static:/app/app/static
+      - ./app/main.py:/app/app/main.py
       - ./app/agents:/app/app/agents
       - ./app/api:/app/app/api
       - ./app/core:/app/app/core
@@ -91,6 +92,18 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  redis:
+    image: redis:7-alpine
+    container_name: outdoor-buddy-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   minio:
     image: minio/minio:latest

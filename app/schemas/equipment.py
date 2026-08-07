@@ -36,6 +36,7 @@ class EquipmentRecommendRequest(BaseModel):
     season: str = Field(default="春", description="出行季节")
     terrain: str = Field(default="山地", description="地形特征")
     people_count: int = Field(default=1, ge=1, le=20, description="出行人数")
+    stream: bool = Field(default=False, description="是否 SSE 流式输出")
 
 
 class EquipmentRecommendResult(BaseModel):

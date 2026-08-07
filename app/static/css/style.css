@@ -1390,7 +1390,10 @@ select:focus-visible, textarea:focus-visible {
 
 /* Reply list */
 .reply-list { padding-left: 56px; }
-.reply-item { display: flex; gap: 12px; padding: 12px 0; border-bottom: 1px solid var(--border-subtle); }
+.reply-item { display: flex; gap: 12px; padding: 12px 8px; border-bottom: 1px solid var(--border-subtle); cursor: pointer; border-radius: 8px; transition: background 0.15s ease; }
+.reply-item:hover { background: rgba(0,0,0,0.03); }
+.reply-item.selected { background: #fdf1e2; box-shadow: inset 3px 0 0 var(--amber); }
+.reply-item.selected .feed-author { color: var(--amber); font-weight: 600; }
 .forum-editor { width: 100%; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; resize: vertical; }
 
 /* ============================================================
