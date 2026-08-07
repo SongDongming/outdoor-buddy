@@ -751,10 +751,6 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         this.forumCommentOpen = { ...this.forumCommentOpen, [postId]: true };
         this.forumReplyTarget = null;
         this.forumReplyContent = '';
-        this.$nextTick(() => {
-          const el = document.getElementById('forum-comments-' + postId);
-          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        });
       }
     },
     async forumLoadComments(postId) {
@@ -903,7 +899,8 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         // 找到当前可见的内联回复框（避免重复 id / 隐藏元素）
         const area = [...document.querySelectorAll('.forum-inline-reply-area')].find(el => el.offsetParent !== null);
         if (area) {
-          area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          // 仅当输入框被遮挡时最小滚动（block: nearest），避免页面跳来跳去
+          area.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           const ta = area.querySelector('textarea');
           if (ta) ta.focus();
         }
