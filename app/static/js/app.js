@@ -173,17 +173,15 @@ document.addEventListener('alpine:init', () => {
     // Route drawer
     routeDrawerOpen: false, routeDrawerData: null,
     // Forum
-    forumView: 'list',
+    forumView: 'list',                 // 'list' | 'create'
     forumLightboxOpen: false, forumLightboxSrc: '',
-    forumExpandedPosts: {},
-    forumReplyInputFor: null,
-    forumExpandedReplies: {},
-    forumLoadingReplies: {},
+    forumExpandedPosts: {},            // 帖子图片展开
+    forumComments: {},                 // postId → 回复树（就地展开的评论）
+    forumCommentOpen: {},              // postId → 帖子评论区是否展开
+    forumChildExpand: {},              // 'c'+commentId → 嵌套回复是否展开
     forumCatId: null,
     forumCategories: [], forumPosts: [], forumTotal: 0, forumPage: 1,
     forumLoading: false,
-    forumDetailLoading: false,
-    forumPostDetail: null,
     forumNewPost: { catId: null, title: '', content: '', images: [] },
     forumReplyContent: '',
     forumReplyImages: [],
@@ -741,16 +739,44 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       } catch(e) { this.toast('加载失败: ' + e.message); }
       finally { this.loading.forum = false; }
     },
-    async forumViewPost(p) {
-      this.forumView = 'detail';
-      this.forumDetailLoading = true;
-      this.forumReplyTarget = null;
-      this.forumReplyContent = '';
+    async forumToggleComments(p) {
+      // 点帖子 → 就地展开/收起评论区（抖音风格，不切页）
+      const postId = p.id;
+      if (this.forumCommentOpen[postId]) {
+        this.forumCommentOpen = { ...this.forumCommentOpen, [postId]: false };
+      } else {
+        if (!this.forumComments[postId]) {
+          await this.forumLoadComments(postId);
+        }
+        this.forumCommentOpen = { ...this.forumCommentOpen, [postId]: true };
+        this.forumReplyTarget = null;
+        this.forumReplyContent = '';
+        this.$nextTick(() => {
+          const el = document.getElementById('forum-comments-' + postId);
+          if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      }
+    },
+    async forumLoadComments(postId) {
       try {
-        const r = await API.forum.getPost(p.id);
-        this.forumPostDetail = r.data;
-      } catch(e) { this.toast(e.message); }
-      finally { this.forumDetailLoading = false; }
+        const r = await API.forum.getReplies(postId);
+        this.forumComments = { ...this.forumComments, [postId]: r.data?.replies || [] };
+      } catch(e) { this.toast('评论加载失败'); }
+    },
+    forumCommentsFlat(postId) {
+      // 把某帖回复树压平为 [{...r, depth}]，按 forumChildExpand['c'+id] 控制子层
+      const tree = this.forumComments[postId] || [];
+      const out = [];
+      const walk = (nodes, depth) => {
+        for (const n of nodes) {
+          out.push({ ...n, depth });
+          if (n.children?.length && this.forumChildExpand['c' + n.id]) {
+            walk(n.children, depth + 1);
+          }
+        }
+      };
+      walk(tree, 0);
+      return out;
     },
     async forumCreatePost() {
       if (this.inFlight.forumCreate) return;
@@ -792,17 +818,20 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
     async forumSubmitReply() {
       if (this.inFlight.forumSubmitReply) return;
       if (!this.forumReplyContent.trim()) return this.toast('请输入回复内容');
+      const postId = this.forumReplyTarget?.postId;
+      if (!postId) return this.toast('请先选择要回复的帖子');
       this.inFlight.forumSubmitReply = true;
       try {
         const parentId = this.forumReplyTarget?.parentId || null;
-        await API.forum.createReply(this.forumPostDetail.id, {
+        await API.forum.createReply(postId, {
           content: this.forumReplyContent, images: this.forumReplyImages, parent_id: parentId
         });
         this.toast('回复成功');
         this.forumReplyContent = '';
         this.forumReplyImages = [];
         this.forumReplyTarget = null;
-        await this.forumViewPost(this.forumPostDetail);
+        await this.forumLoadComments(postId);
+        await this.forumLoadPosts();
       } catch(e) { this.toast(e.message); }
       finally { this.inFlight.forumSubmitReply = false; }
     },
@@ -818,11 +847,7 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       try {
         await API.forum.deleteReply(replyId);
         this.toast('已删除');
-        if (postId && this.forumPostDetail?.id === postId) {
-          await this.forumViewPost(this.forumPostDetail);
-        } else if (postId && this.forumExpandedReplies[postId]) {
-          await this.forumLoadReplies(postId);
-        }
+        if (postId) await this.forumLoadComments(postId);
         await this.forumLoadPosts();
       } catch(e) { this.toast(e.message); }
     },
@@ -848,66 +873,7 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
     },
     forumHasMoreImages(images) { return images && images.length > 3; },
 
-    // === Inline Reply ===
-    forumToggleReplyInput(postId) {
-      this.forumReplyInputFor = this.forumReplyInputFor === postId ? null : postId;
-      this.forumReplyContent = '';
-    },
-    async forumQuickReply(postId) {
-      if (this.inFlight.forumQuickReply) return;
-      const content = this.forumReplyContent?.trim();
-      if (!content) return;
-      this.inFlight.forumQuickReply = true;
-      this.forumReplyContent = '';
-      this.forumReplyInputFor = null;
-      try {
-        await API.forum.createReply(postId, { content, images: [] });
-        this.toast('回复成功');
-        if (this.forumExpandedReplies[postId]) {
-          await this.forumLoadReplies(postId);
-        }
-        await this.forumLoadPosts();
-      } catch(e) { this.toast(e.message); }
-      finally { this.inFlight.forumQuickReply = false; }
-    },
-
-    async forumToggleReplies(postId) {
-      if (this.forumExpandedReplies[postId]) {
-        const newReplies = { ...this.forumExpandedReplies };
-        delete newReplies[postId];
-        this.forumExpandedReplies = newReplies;
-      } else {
-        await this.forumLoadReplies(postId);
-      }
-    },
-
-    async forumLoadReplies(postId) {
-      this.forumLoadingReplies = { ...this.forumLoadingReplies, [postId]: true };
-      try {
-        const r = await API.forum.getReplies(postId);
-        this.forumExpandedReplies = { ...this.forumExpandedReplies, [postId]: r.data?.replies || [] };
-      } catch(e) { this.toast(e.message); }
-      finally {
-        this.forumLoadingReplies = { ...this.forumLoadingReplies, [postId]: false };
-      }
-    },
-
     // === 嵌套回复（抖音评论风格） ===
-    get forumFlatList() {
-      // 把回复树压平，depth 控制缩进；按 forumExpandedReplies['c'+id] 展开子回复
-      const tree = this.forumPostDetail?.replies || [];
-      const out = [];
-      const walk = (nodes, depth) => {
-        for (const n of nodes) {
-          out.push({ ...n, depth });
-          if (n.children?.length && this.forumExpandedReplies['c' + n.id]) {
-            walk(n.children, depth + 1);
-          }
-        }
-      };
-      walk(tree, 0);
-      return out;
-    },
     forumReplyCount(n) {
       // 计算某评论下的回复总数（含所有层级子孙）
       if (!n || !n.children?.length) return 0;
@@ -917,7 +883,7 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
     },
     forumToggleReplyChildren(replyId) {
       const key = 'c' + replyId;
-      this.forumExpandedReplies = { ...this.forumExpandedReplies, [key]: !this.forumExpandedReplies[key] };
+      this.forumChildExpand = { ...this.forumChildExpand, [key]: !this.forumChildExpand[key] };
     },
     isReplySelected(r) {
       // 判断某条评论是否被选中回复（供 :class 使用，避免模板里的可选链表达式）
@@ -943,14 +909,14 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         }
       });
     },
-    openReplyToPost() {
+    openReplyToPost(postId) {
       // 回复帖子本体（顶层回复）
       if (!this.user) {
         this.toast('请先登录后再回复');
         this.showAuth = true;
         return;
       }
-      this.forumReplyTarget = { postId: this.forumPostDetail?.id, parentId: null, replyToName: '' };
+      this.forumReplyTarget = { postId, parentId: null, replyToName: '' };
       this.forumReplyContent = '';
     },
     isReplyingToComment() {
@@ -971,14 +937,15 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       });
     },
     async forumToggleLike(r) {
-      // 点赞 / 取消点赞评论
+      // 点赞 / 取消点赞评论（更新对应帖的评论树）
       if (!this.user) { this.toast('请先登录后点赞'); this.showAuth = true; return; }
       try {
         const res = await API.forum.likeReply(r.id);
         const { liked, like_count } = res.data;
-        this.forumPostDetail = {
-          ...this.forumPostDetail,
-          replies: this._patchReplyTree(this.forumPostDetail?.replies || [], r.id, { liked, like_count }),
+        const postId = r.post_id;
+        this.forumComments = {
+          ...this.forumComments,
+          [postId]: this._patchReplyTree(this.forumComments[postId] || [], r.id, { liked, like_count }),
         };
       } catch(e) { this.toast(e.message); }
     },
@@ -988,9 +955,6 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       try {
         const res = await API.forum.pinPost(post.id);
         this.toast(res.message || '操作成功');
-        if (this.forumView === 'detail' && this.forumPostDetail?.id === post.id) {
-          this.forumPostDetail = { ...this.forumPostDetail, is_pinned: res.data?.is_pinned ?? !post.is_pinned };
-        }
         await this.forumLoadPosts();
       } catch(e) { this.toast(e.message); }
     },

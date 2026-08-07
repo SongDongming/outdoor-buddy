@@ -30,7 +30,7 @@
       <span class="nav-icon">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
       </span> <span>路线查询</span>
-      <span class="nav-badge" x-show="routeResults?.routes?.length" x-text="routeResults.routes.length" style="font-size:.6rem;min-width:18px;text-align:center"></span>
+      <span class="nav-badge" x-show="routeResults?.routes?.length" x-text="routeResults?.routes?.length || 0" style="font-size:.6rem;min-width:18px;text-align:center"></span>
     </button>
     <button class="nav-item" :class="{active:page==='equipment'}" @click="navigate('equipment')">
       <span class="nav-icon">
@@ -77,8 +77,8 @@
   <div class="sidebar-footer">
     <div x-show="user" x-transition.opacity>
       <div class="user-info">
-        <div class="user-avatar" :style="user.avatar_url ? 'background-image:url('+user.avatar_url+');background-size:cover;background-position:center' : ''" x-text="user.avatar_url ? '' : user.username[0]?.toUpperCase()"></div>
-        <div><div style="font-weight:500" x-text="user.username"></div>
+        <div class="user-avatar" :style="(user && user.avatar_url) ? 'background-image:url('+user.avatar_url+');background-size:cover;background-position:center' : ''" x-text="(user && user.avatar_url) ? '' : (user && user.username ? user.username[0]?.toUpperCase() : '')"></div>
+        <div><div style="font-weight:500" x-text="user && user.username"></div>
         <div style="font-size:.7rem;color:var(--sage);cursor:pointer" @click="logout">退出</div></div>
       </div>
     </div>
@@ -585,7 +585,7 @@
       <div x-show="forumPosts.length > 0">
         <div class="feed-list">
           <template x-for="p in forumPosts" :key="p.id">
-            <div class="feed-item" :id="'post-'+p.id" @click="forumViewPost(p)" style="cursor:pointer">
+            <div class="feed-item" :id="'post-'+p.id">
               <div class="feed-avatar" :style="p.author_avatar_url ? 'background-image:url('+p.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="p.author_avatar_url ? '' : (p.author_name||'?')[0]?.toUpperCase()"></div>
               <div class="feed-body">
                 <div class="feed-header">
@@ -593,7 +593,7 @@
                   <span class="feed-cat" x-text="p.category_name"></span>
                   <span class="feed-time" x-text="formatTime(p.created_at)"></span>
                 </div>
-                <div class="feed-content md-content" x-html="md(p.content)"></div>
+                <div class="feed-content md-content" @click="forumToggleComments(p)" style="cursor:pointer" x-html="md(p.content)"></div>
                 <div class="feed-images" x-show="p.images?.length">
                   <template x-for="(img,i) in forumVisibleImages(p.images, p.id)" :key="p.id + '-img-' + i">
                     <img :src="img" class="feed-img" @click.stop="forumOpenLightbox(img)" loading="lazy">
@@ -602,44 +602,60 @@
                     <span x-text="'+'+(p.images.length-3)"></span>
                   </div>
                 </div>
-                <div class="feed-inline-reply" x-show="p.latest_reply && !forumExpandedReplies[p.id]">
-                  <span class="inline-reply-author" x-text="p.latest_reply.author_name+': '"></span>
-                  <span class="inline-reply-text" x-text="p.latest_reply.content?.slice(0,80)+(p.latest_reply.content?.length>80?'...':'')"></span>
-                </div>
-                <div class="feed-expanded-replies" x-show="forumExpandedReplies[p.id]">
-                  <template x-for="r in forumExpandedReplies[p.id]" :key="r.id">
-                    <div class="feed-inline-reply" style="margin-top:4px">
-                      <span class="inline-reply-author" x-text="r.author_name+': '"></span>
-                      <span class="inline-reply-text" x-text="r.content"></span>
-                      <div class="feed-images" x-show="r.images?.length" style="margin-top:4px">
-                        <template x-for="img in forumVisibleImages(r.images, 'r'+r.id)" :key="'r'+r.id+'-'+img">
-                          <img :src="img" class="feed-img" @click.stop="forumOpenLightbox(img)" loading="lazy" style="width:60px;height:60px">
-                        </template>
-                      </div>
-                      <button class="feed-del-btn" @click.stop="forumDeleteReply(r.id, p.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" style="font-size:.7rem">🗑</button>
-                    </div>
-                  </template>
-                  <div x-show="forumLoadingReplies[p.id]" class="loading-pulse" style="padding:8px">加载回复中...</div>
-                </div>
                 <div class="feed-actions">
-                  <span x-show="p.reply_count > 1" @click.stop="forumToggleReplies(p.id)" style="cursor:pointer;color:var(--amber);font-weight:500">
-                    <span x-show="!forumExpandedReplies[p.id]" x-text="'展开全部'+p.reply_count+'条回复'"></span>
-                    <span x-show="forumExpandedReplies[p.id]">收起回复</span>
-                  </span>
-                  <span x-show="p.reply_count <= 1" style="color:var(--sage);font-size:.78rem">💬 <span x-text="p.reply_count||0"></span></span>
+                  <button class="feed-reply-btn" @click.stop="forumToggleComments(p)" style="border:none;background:none;cursor:pointer;color:var(--amber);font-weight:500;font-size:.8rem">
+                    💬 <span x-text="p.reply_count||0"></span> 条评论 <span x-text="forumCommentOpen[p.id] ? '▲' : '▼'"></span>
+                  </button>
+                  <button class="feed-reply-btn" @click.stop="openReplyToPost(p.id)" x-show="user" style="border:none;background:none;cursor:pointer;color:var(--amber);font-size:.8rem">↩ 回复</button>
                   <button class="feed-del-btn" @click.stop="forumTogglePin(p)" x-show="user?.role==='admin'" style="font-size:.7rem" x-text="p.is_pinned ? '📌 已置顶' : '📌 置顶'"></button>
                   <button class="feed-del-btn" @click.stop="forumDeletePost(p.id)" x-show="user && (user.id===p.author_id || user.role==='admin')">🗑</button>
-                  <button class="feed-reply-btn" @click.stop="forumToggleReplyInput(p.id)" x-show="user">↩ 回复</button>
                 </div>
-                <div class="feed-reply-box" x-show="forumReplyInputFor === p.id" @click.stop="">
-                  <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="2" maxlength="2000"
-                   style="width:100%;margin-bottom:6px;font-size:.82rem"
-                   @keydown.ctrl.enter="forumQuickReply(p.id)" @keydown.meta.enter="forumQuickReply(p.id)"
-                   x-effect="forumReplyInputFor === p.id && $nextTick(() => $el.focus())"></textarea>
-                  <div style="display:flex;gap:6px;align-items:center">
-                    <button class="btn btn-amber btn-sm" @click="forumQuickReply(p.id)" :disabled="inFlight.forumQuickReply">发送</button>
-                    <button class="btn btn-ghost btn-sm" @click="forumReplyInputFor=null">取消</button>
-                    <span style="font-size:.7rem;color:var(--sage)">Ctrl+Enter 快捷发送</span>
+                <!-- 评论区（就地展开，抖音风格） -->
+                <div x-show="forumCommentOpen[p.id]" :id="'forum-comments-'+p.id" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-subtle)">
+                  <div class="reply-list" style="padding-left:0">
+                    <template x-for="(r,idx) in forumCommentsFlat(p.id)" :key="'pc'+p.id+'-'+r.id">
+                      <div :style="'margin-left:' + (r.depth * 20) + 'px'">
+                        <div class="reply-item" @click="openReplyTo(r)" :class="{selected: isReplySelected(r)}">
+                          <div class="feed-avatar" style="width:26px;height:26px;font-size:.65rem;flex-shrink:0" :style="r.author_avatar_url ? 'background-image:url('+r.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="r.author_avatar_url ? '' : (r.author_name||'?')[0]?.toUpperCase()"></div>
+                          <div class="feed-body">
+                            <div class="feed-header">
+                              <span class="feed-author" style="font-size:.8rem" x-text="r.author_name"></span>
+                              <span class="feed-time" x-text="formatTime(r.created_at)"></span>
+                              <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
+                                <button class="feed-del-btn" @click.stop="forumToggleLike(r)" x-show="user" style="font-size:.7rem" :style="r.liked ? 'color:var(--amber);font-weight:600' : ''">👍 <span x-text="r.like_count||0"></span></button>
+                                <button class="feed-del-btn" @click.stop="openReplyTo(r)" x-show="user" style="font-size:.7rem">↩</button>
+                                <button class="feed-del-btn" @click.stop="forumDeleteReply(r.id, p.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" style="font-size:.7rem">🗑</button>
+                              </div>
+                            </div>
+                            <div style="font-size:.8rem" x-show="r.reply_to_name"><span style="color:var(--amber)">回复 @<span x-text="r.reply_to_name"></span>：</span></div>
+                            <div class="feed-content md-content" style="font-size:.82rem" x-html="md(r.content)"></div>
+                            <div x-show="r.children?.length" style="margin-top:3px">
+                              <span @click.stop="forumToggleReplyChildren(r.id)" style="cursor:pointer;color:var(--amber);font-weight:500;font-size:.72rem">
+                                <span x-show="!forumChildExpand['c'+r.id]" x-text="'展开 ' + forumReplyCount(r) + ' 条回复 ▾'"></span>
+                                <span x-show="forumChildExpand['c'+r.id]">收起回复 ▴</span>
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                        <!-- 点选评论后就地弹出的内联回复框 -->
+                        <div class="forum-inline-reply-area" x-show="isReplySelected(r)" style="margin:6px 0 6px 40px;padding:8px;background:#fdf1e2;border-radius:8px">
+                          <div style="font-size:.78rem;color:var(--amber);margin-bottom:5px">✍️ 正在回复 @<strong x-text="r.author_name"></strong></div>
+                          <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" style="width:100%;font-size:.8rem"></textarea>
+                          <div style="display:flex;gap:8px;margin-top:5px">
+                            <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">发送</button>
+                            <button class="btn btn-ghost btn-sm" @click="forumCancelReply()">取消</button>
+                          </div>
+                        </div>
+                      </div>
+                    </template>
+                    <div x-show="!forumCommentsFlat(p.id).length" style="color:var(--sage);font-size:.8rem;padding:8px 0">暂无评论，来抢沙发～</div>
+                  </div>
+                  <!-- 帖子底部回复框（回复帖子本体） -->
+                  <div x-show="user && !isReplyingToComment()" style="margin-top:8px">
+                    <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的评论..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" @focus="openReplyToPost(p.id)" style="width:100%;font-size:.82rem"></textarea>
+                    <div style="display:flex;gap:8px;margin-top:6px">
+                      <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">发布评论</button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -692,116 +708,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Detail View -->
-    <div x-show="forumView==='detail' && forumPostDetail" x-transition.opacity style="padding:0 40px;max-width:750px">
-      <div x-show="forumDetailLoading" class="loading-pulse">加载中...</div>
-      <div x-show="!forumDetailLoading">
-        <div class="feed-detail-card">
-          <div class="feed-item" style="cursor:default;border:none;padding:0">
-            <div class="feed-avatar" style="width:44px;height:44px;font-size:1rem" :style="forumPostDetail.author_avatar_url ? 'background-image:url('+forumPostDetail.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="forumPostDetail.author_avatar_url ? '' : (forumPostDetail.author_name||'?')[0]?.toUpperCase()"></div>
-            <div class="feed-body">
-              <div class="feed-header">
-                <span class="feed-author" x-text="forumPostDetail.author_name"></span>
-                <span class="feed-cat" x-text="forumPostDetail.category_name"></span>
-                <span class="feed-time" x-text="formatTime(forumPostDetail.created_at)"></span>
-                <button class="feed-del-btn" @click="forumTogglePin(forumPostDetail)" x-show="user?.role==='admin'" style="font-size:.7rem" x-text="forumPostDetail.is_pinned ? '📌 已置顶' : '📌 置顶'"></button>
-                <button class="feed-del-btn" @click="forumDeletePost(forumPostDetail.id);forumView='list'" x-show="user && (user.id===forumPostDetail.author_id || user.role==='admin')" style="margin-left:auto">🗑 删除</button>
-              </div>
-              <div class="feed-content md-content" x-html="md(forumPostDetail.content)"></div>
-              <div class="feed-images" x-show="forumPostDetail.images?.length">
-                <template x-for="img in forumVisibleImages(forumPostDetail.images, forumPostDetail.id)" :key="forumPostDetail.id + '-d-' + img">
-                  <img :src="img" class="feed-img" @click="forumOpenLightbox(img)" loading="lazy">
-                </template>
-                <div class="feed-img-more" x-show="forumHasMoreImages(forumPostDetail.images) && !forumExpandedPosts[forumPostDetail.id]" @click="forumToggleImages(forumPostDetail.id)">
-                  <span x-text="'+'+(forumPostDetail.images.length-3)"></span>
-                </div>
-              </div>
-              <div class="feed-actions" style="padding-top:8px">
-                <span>💬 <span x-text="forumPostDetail.reply_count||0"></span></span>
-                <button class="feed-reply-btn" @click="openReplyToPost()" x-show="user" style="border:none;background:none;cursor:pointer;color:var(--amber);font-size:.8rem">↩ 回复</button>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div style="margin-top:8px">
-          <div style="font-family:'Playfair Display',serif;font-size:1.1rem;color:var(--deep-forest);margin-bottom:12px;padding-left:56px">
-            评论 (<span x-text="forumPostDetail.reply_count||0"></span>)
-          </div>
-          <div x-show="forumFlatList.length > 0">
-            <div class="reply-list">
-              <template x-for="(r,idx) in forumFlatList" :key="r.id">
-                <div :style="'margin-left:' + (r.depth * 20) + 'px'">
-                  <div class="reply-item" @click="openReplyTo(r)" :class="{selected: isReplySelected(r)}">
-                    <div class="feed-avatar" style="width:28px;height:28px;font-size:.7rem;flex-shrink:0" :style="r.author_avatar_url ? 'background-image:url('+r.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="r.author_avatar_url ? '' : (r.author_name||'?')[0]?.toUpperCase()"></div>
-                    <div class="feed-body">
-                      <div class="feed-header">
-                        <span class="feed-author" x-text="r.author_name"></span>
-                        <span class="feed-time" x-text="formatTime(r.created_at)"></span>
-                        <div style="margin-left:auto;display:flex;gap:6px;align-items:center">
-                          <button class="feed-del-btn" @click.stop="forumToggleLike(r)" x-show="user" style="font-size:.7rem" :style="r.liked ? 'color:var(--amber);font-weight:600' : ''">
-                            👍 <span x-text="r.like_count||0"></span>
-                          </button>
-                          <button class="feed-del-btn" @click.stop="openReplyTo(r)" x-show="user" style="font-size:.7rem">↩ 回复</button>
-                          <button class="feed-del-btn" @click.stop="forumDeleteReply(r.id, forumPostDetail.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" style="font-size:.7rem">🗑</button>
-                        </div>
-                      </div>
-                      <div class="feed-content md-content" style="font-size:.85rem" x-show="r.reply_to_name">
-                        <span style="color:var(--amber)">回复 @<span x-text="r.reply_to_name"></span>：</span>
-                      </div>
-                      <div class="feed-content md-content" style="font-size:.85rem" x-html="md(r.content)"></div>
-                      <div class="feed-images" x-show="r.images?.length">
-                        <template x-for="img in forumVisibleImages(r.images, 'r'+r.id)" :key="'rd-'+r.id+'-'+img">
-                          <img :src="img" class="feed-img" @click.stop="forumOpenLightbox(img)" loading="lazy" style="width:70px;height:70px">
-                        </template>
-                        <div class="feed-img-more" x-show="forumHasMoreImages(r.images) && !forumExpandedPosts['r'+r.id]" @click.stop="forumToggleImages('r'+r.id)" style="width:70px;height:70px;font-size:.8rem">
-                          <span x-text="'+'+(r.images.length-3)"></span>
-                        </div>
-                      </div>
-                      <div x-show="r.children?.length" style="margin-top:4px">
-                        <span @click.stop="forumToggleReplyChildren(r.id)" style="cursor:pointer;color:var(--amber);font-weight:500;font-size:.75rem">
-                          <span x-show="!forumExpandedReplies['c'+r.id]" x-text="'展开 ' + forumReplyCount(r) + ' 条回复 ▾'"></span>
-                          <span x-show="forumExpandedReplies['c'+r.id]">收起回复 ▴</span>
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  <!-- 选中评论后就地弹出的内联回复框 -->
-                  <div class="forum-inline-reply-area" x-show="isReplySelected(r)" style="margin:8px 0 8px 48px;padding:10px;background:#fdf1e2;border-radius:8px">
-                    <div style="font-size:.8rem;color:var(--amber);margin-bottom:6px">✍️ 正在回复 @<strong x-text="r.author_name"></strong></div>
-                    <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" style="width:100%;font-size:.85rem"></textarea>
-                    <div style="display:flex;gap:8px;margin-top:6px">
-                      <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">发送</button>
-                      <button class="btn btn-ghost btn-sm" @click="forumCancelReply()">取消</button>
-                    </div>
-                  </div>
-                </div>
-              </template>
-            </div>
-          </div>
-          <div x-show="!forumFlatList.length" style="color:var(--sage);font-size:.85rem;padding:16px 56px">暂无评论</div>
-        </div>
-
-        <div class="card" style="margin-top:16px;margin-left:56px" x-show="user && !isReplyingToComment()" id="forum-reply-box">
-          <div x-show="forumReplyTarget?.replyToName" style="display:flex;align-items:center;gap:8px;background:#fdf1e2;border-left:3px solid var(--amber);border-radius:6px;padding:7px 12px;margin-bottom:8px;font-size:.85rem;color:var(--deep-forest)">
-            <span>✍️ 正在回复 @<strong x-text="forumReplyTarget.replyToName"></strong></span>
-            <button @click="forumCancelReply()" style="margin-left:auto;color:var(--danger);border:none;background:none;cursor:pointer;font-size:.75rem">取消</button>
-          </div>
-          <textarea id="forum-reply-textarea" class="form-input" x-model="forumReplyContent" :placeholder="forumReplyTarget?.replyToName ? '回复 @'+forumReplyTarget.replyToName+'...' : '写下你的评论...'" rows="3" maxlength="2000" style="width:100%;margin-bottom:8px" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()"></textarea>
-          <div style="display:flex;gap:8px;align-items:center">
-            <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">回复</button>
-            <span class="btn btn-outline btn-sm" style="cursor:pointer" @click="document.getElementById('forumReplyFileInput').click()">📷 图片</span>
-            <input type="file" accept="image/*" @change="forumReplyUploadImage($event)" style="display:none" id="forumReplyFileInput">
-            <template x-for="(img,i) in forumReplyImages" :key="'fri-'+i"><span style="font-size:.75rem;color:var(--sage)" x-text="'📎 图'+(i+1)"></span></template>
-          </div>
-        </div>
-        <div style="margin-top:16px;margin-left:56px;text-align:center" x-show="!user">
-          <span style="color:var(--sage);font-size:.85rem">请<a href="#" @click.prevent="toggleAuth()" style="color:var(--amber)">登录</a>后参与讨论</span>
-        </div>
-      </div>
-    </div>
-  </div>
 
   <!-- ====== IMAGE LIGHTBOX ====== -->
   <div class="lightbox-overlay" x-show="forumLightboxOpen" @click="forumCloseLightbox()" @keydown.escape="forumCloseLightbox()"
@@ -958,7 +864,7 @@
 </div>
 
 <script src="/static/js/api.js?v=3.6"></script>
-<script src="/static/js/app.js?v=4.0"></script>
+<script src="/static/js/app.js?v=4.2"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
 </body>
