@@ -417,7 +417,7 @@
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   fontSize: '.65rem', fontWeight: 700, color: si <= planActiveStep ? '#000' : 'var(--text-muted)',
                   transition: 'all var(--transition)',
-                  fontFamily: '"Outfit", sans-serif'
+                  fontFamily: 'Outfit, sans-serif'
                 }" x-text="si < planActiveStep ? '✓' : si + 1"></div>
                 <span style="font-size:.6rem;color: si <= planActiveStep ? 'var(--text-primary)' : 'var(--text-muted)';text-transform:uppercase;letter-spacing:.04em;font-family:'Outfit',sans-serif;font-weight:600;transition:color var(--transition)" x-text="step"></span>
               </div>
@@ -585,7 +585,7 @@
       <div x-show="forumPosts.length > 0">
         <div class="feed-list">
           <template x-for="p in forumPosts" :key="p.id">
-            <div class="feed-item" :id="'post-'+p.id">
+            <div class="feed-item" :id="'post-'+p.id" @click="forumViewPost(p)" style="cursor:pointer">
               <div class="feed-avatar" :style="p.author_avatar_url ? 'background-image:url('+p.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="p.author_avatar_url ? '' : (p.author_name||'?')[0]?.toUpperCase()"></div>
               <div class="feed-body">
                 <div class="feed-header">
@@ -768,9 +768,9 @@
                     </div>
                   </div>
                   <!-- 选中评论后就地弹出的内联回复框 -->
-                  <div x-show="isReplySelected(r)" style="margin:8px 0 8px 48px;padding:10px;background:#fdf1e2;border-radius:8px">
+                  <div class="forum-inline-reply-area" x-show="isReplySelected(r)" style="margin:8px 0 8px 48px;padding:10px;background:#fdf1e2;border-radius:8px">
                     <div style="font-size:.8rem;color:var(--amber);margin-bottom:6px">✍️ 正在回复 @<strong x-text="r.author_name"></strong></div>
-                    <textarea id="forum-inline-reply-textarea" class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" style="width:100%;font-size:.85rem"></textarea>
+                    <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的回复..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" style="width:100%;font-size:.85rem"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px">
                       <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">发送</button>
                       <button class="btn btn-ghost btn-sm" @click="forumCancelReply()">取消</button>
@@ -958,7 +958,7 @@
 </div>
 
 <script src="/static/js/api.js?v=3.6"></script>
-<script src="/static/js/app.js?v=3.8"></script>
+<script src="/static/js/app.js?v=4.0"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
 </body>

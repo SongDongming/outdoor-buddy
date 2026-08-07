@@ -934,8 +934,13 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       this.forumReplyContent = '';
       this.toast('正在回复 @' + (r.author_name || ''));
       this.$nextTick(() => {
-        const ta = document.getElementById('forum-inline-reply-textarea');
-        if (ta) { ta.focus(); ta.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
+        // 找到当前可见的内联回复框（避免重复 id / 隐藏元素）
+        const area = [...document.querySelectorAll('.forum-inline-reply-area')].find(el => el.offsetParent !== null);
+        if (area) {
+          area.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          const ta = area.querySelector('textarea');
+          if (ta) ta.focus();
+        }
       });
     },
     openReplyToPost() {
