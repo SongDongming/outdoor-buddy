@@ -179,6 +179,7 @@ document.addEventListener('alpine:init', () => {
     forumComments: {},                 // postId → 回复树（就地展开的评论）
     forumCommentOpen: {},              // postId → 帖子评论区是否展开
     forumChildExpand: {},              // 'c'+commentId → 嵌套回复是否展开
+    forumCommentsShowAll: {},          // postId → 是否展开全部一级评论（默认预览前2条）
     forumCatId: null,
     forumCategories: [], forumPosts: [], forumTotal: 0, forumPage: 1,
     forumLoading: false,
@@ -761,10 +762,17 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
     },
     forumCommentsFlat(postId) {
       // 把某帖回复树压平为 [{...r, depth}]，按 forumChildExpand['c'+id] 控制子层
+      // 一级评论默认只预览前 2 条，点"查看全部"后展示全部；嵌套回复保持点击展开
       const tree = this.forumComments[postId] || [];
+      const showAll = !!this.forumCommentsShowAll[postId];
+      const PREVIEW_TOP = 2;
       const out = [];
+      let topCount = 0;
       const walk = (nodes, depth) => {
         for (const n of nodes) {
+          const isTop = depth === 0;
+          if (isTop && !showAll && topCount >= PREVIEW_TOP) continue;
+          if (isTop) topCount++;
           out.push({ ...n, depth });
           if (n.children?.length && this.forumChildExpand['c' + n.id]) {
             walk(n.children, depth + 1);
@@ -773,6 +781,13 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       };
       walk(tree, 0);
       return out;
+    },
+    forumTopLevelCount(postId) {
+      // 该帖一级评论总数（供"查看全部 N 条评论"显示）
+      return (this.forumComments[postId] || []).length;
+    },
+    forumShowAllComments(postId) {
+      this.forumCommentsShowAll = { ...this.forumCommentsShowAll, [postId]: true };
     },
     async forumCreatePost() {
       if (this.inFlight.forumCreate) return;

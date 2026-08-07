@@ -650,6 +650,12 @@
                     </template>
                     <div x-show="!forumCommentsFlat(p.id).length" style="color:var(--sage);font-size:.8rem;padding:8px 0">暂无评论，来抢沙发～</div>
                   </div>
+                  <!-- 一级评论预览：默认显示前2条，点此查看全部 -->
+                  <div x-show="!forumCommentsShowAll[p.id] && forumTopLevelCount(p.id) > 2" style="text-align:center;margin-top:10px">
+                    <button class="btn btn-outline btn-sm" @click="forumShowAllComments(p.id)">
+                      查看全部 <span x-text="forumTopLevelCount(p.id)"></span> 条评论
+                    </button>
+                  </div>
                   <!-- 帖子底部回复框（回复帖子本体） -->
                   <div x-show="user && !isReplyingToComment()" style="margin-top:8px">
                     <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的评论..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" @focus="openReplyToPost(p.id)" style="width:100%;font-size:.82rem"></textarea>
@@ -864,7 +870,7 @@
 </div>
 
 <script src="/static/js/api.js?v=3.6"></script>
-<script src="/static/js/app.js?v=4.3"></script>
+<script src="/static/js/app.js?v=4.4"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
 </body>
