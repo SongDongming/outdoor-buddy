@@ -1708,20 +1708,22 @@ select:focus-visible, textarea:focus-visible {
   100% { transform: translate(24px, -72vh); opacity: 0; }
 }
 
-/* —— 地平线 —— */
+/* —— 山路线（有起伏的地平线） —— */
 .splash-horizon {
   position: absolute;
   top: 50%;
   left: 50%;
   width: 58%;
-  height: 2px;
-  background: #8b6f52;
+  height: 40px;
+  margin-top: -20px;
   opacity: 0.7;
+  overflow: visible;
   transform: translateX(-50%) scaleX(0);
   transform-origin: center;
   animation: splash-horizon 0.5s ease-out forwards;
   transition: opacity 0.4s ease;
 }
+.splash-horizon path { stroke: #8b6f52; }
 @keyframes splash-horizon {
   from { transform: translateX(-50%) scaleX(0); }
   to   { transform: translateX(-50%) scaleX(1); }
@@ -1756,28 +1758,26 @@ select:focus-visible, textarea:focus-visible {
   100% { opacity: 1; transform: translateY(0)    scale(1, 1); }
 }
 
-/* —— 副标题（随 hide 状态与整体画面同步淡出） —— */
+/* —— 副标题（flex 流内、标题正下方；随 hide 状态与整体画面同步淡出） —— */
 .splash-subtitle {
-  position: absolute;
-  left: 50%;
-  top: 65%;
-  transform: translateX(-50%) translateY(10px);
+  margin-top: 30px;
   opacity: 0;
   color: #8a7a62;
   letter-spacing: 2px;
   font-size: 15px;
+  transform: translateY(10px);
   /* 淡入、淡出复用同一套过渡曲线，和外层动画节奏对齐 */
   transition: opacity 0.4s ease, transform 0.4s ease;
   pointer-events: none;
 }
 .splash-screen.subtitle-show .splash-subtitle {
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateY(0);
 }
 /* 顶层容器触发 hide 时，副标题同步反向退场，和整体画面同步变淡上飘 */
 .splash-screen.hide .splash-subtitle {
   opacity: 0;
-  transform: translateX(-50%) translateY(-8px);
+  transform: translateY(-8px);
 }
 
 /* —— 落地尘土 —— */

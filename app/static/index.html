@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Outdoor Buddy — 户外徒步助手</title>
-<link rel="stylesheet" href="/static/css/style.css?v=3.9">
+<link rel="stylesheet" href="/static/css/style.css?v=4.0">
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
 <body x-data="app" x-init="init()">
@@ -21,7 +21,9 @@
     <polygon points="0,240 90,150 200,230 300,130 430,220 540,160 660,240 780,140 900,230 1010,170 1200,240 1200,240" fill="#55684a"/>
   </svg>
   <div class="splash-motes"><span></span><span></span><span></span><span></span><span></span></div>
-  <div class="splash-horizon"></div>
+  <svg class="splash-horizon" viewBox="0 0 600 40" preserveAspectRatio="none" aria-hidden="true">
+    <path d="M0,22 C30,14 60,28 90,20 C120,12 150,26 180,22 C210,30 240,14 270,18 C300,12 330,26 360,22 C390,28 420,16 450,20 C480,24 510,16 540,20 C570,14 600,22 600,22" fill="none" stroke-width="2" stroke-linecap="round"/>
+  </svg>
   <h1 class="splash-title" aria-label="用脚步丈量大地">
     <span class="splash-char">用</span><span class="splash-char">脚</span><span class="splash-char">步</span><span class="splash-char">丈</span><span class="splash-char">量</span><span class="splash-char">大</span><span class="splash-char">地</span>
   </h1>
@@ -886,6 +888,6 @@
 <script src="/static/js/app.js?v=5.3"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
-<script src="/static/js/splash.js?v=11"></script>
+<script src="/static/js/splash.js?v=12"></script>
 </body>
 </html>
