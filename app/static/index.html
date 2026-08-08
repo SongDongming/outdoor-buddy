@@ -390,7 +390,6 @@
         <div class="card" style="margin-top:12px" x-show="weatherResults.hiking_assessment"><div class="card-title">徒步可行性评估</div><div class="md-content" x-html="md(weatherResults.hiking_assessment)"></div></div>
         <div class="card" style="margin-top:12px" x-show="weatherResults.equipment_advice"><div class="card-title">装备调整建议</div><div class="md-content" x-html="md(weatherResults.equipment_advice)"></div></div>
       </div>
-    </div>
     <div x-show="page==='weather' && !weatherResults?.forecast?.length && !loading.weather" class="empty-state">
       <div class="empty-icon">🌤️</div>
       <h3>天气查询</h3>
@@ -709,6 +708,7 @@
         </div>
       </div>
     </div>
+  </div>
 
   <!-- ====== IMAGE LIGHTBOX ====== -->
   <div class="lightbox-overlay" x-show="forumLightboxOpen" @click="forumCloseLightbox()" @keydown.escape="forumCloseLightbox()"
@@ -798,7 +798,6 @@
         </div>
       </div>
     </div>
-  </div>
 
 </main>
 
