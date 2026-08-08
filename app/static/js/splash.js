@@ -23,8 +23,8 @@
   }
 
   var chars = splash.querySelectorAll('.splash-char');
-  var STEP_START = 0.3;   // 地平线铺开后第 1 字踩落
-  var STEP_GAP = 0.115;   // 逐字间隔（步行节奏）
+  var STEP_START = 0.5;   // 地平线铺开后第 1 字踩落（放慢）
+  var STEP_GAP = 0.2;     // 逐字间隔（步行节奏，放慢）
 
   /** 在字符底部撒 3-5 颗尘土细粒，向两侧散开消失 */
   function spawnDust(charEl, count) {
@@ -52,14 +52,14 @@
     });
   });
 
-  // 最后一个字踩落结束 → 驱动"上浮 → 副标题 → 淡出"
+  // 最后一个字踩落结束 → 驱动"上浮 → 副标题 → 淡出"（放慢节奏）
   if (lastChar) {
     lastChar.addEventListener('animationend', function onLast() {
       lastChar.removeEventListener('animationend', onLast);
       splash.classList.add('settle');                                  // 标题上浮 + 地平线渐隐
-      setTimeout(function () { splash.classList.add('subtitle-show'); }, 300); // 副标题淡入
-      setTimeout(function () { splash.classList.add('hide'); }, 650);  // 整体淡出
-      setTimeout(removeSplash, 2000);
+      setTimeout(function () { splash.classList.add('subtitle-show'); }, 450); // 副标题淡入
+      setTimeout(function () { splash.classList.add('hide'); }, 1000);  // 整体淡出
+      setTimeout(removeSplash, 2600);
     });
   }
 
