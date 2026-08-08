@@ -58,16 +58,26 @@
       lastChar.removeEventListener('animationend', onLast);
       splash.classList.add('settle');                                  // 标题上浮 + 地平线渐隐
       setTimeout(function () { splash.classList.add('subtitle-show'); }, 450); // 副标题淡入
-      setTimeout(function () { splash.classList.add('hide'); }, 2100);  // 副标题全显后停顿约1秒再淡出
-      setTimeout(removeSplash, 2850);
+      // 完整画面（标题+副标题+背景）停留约1秒后，整体柔和淡出；
+      // 淡出完全结束后（transitionend）才移除，避免中途"突然消失"
+      setTimeout(function () { splash.classList.add('hide'); }, 2000);
     });
   }
 
-  // 兜底：万一 animationend 未触发，4s 后强制移除
-  setTimeout(function () {
-    if (document.getElementById('splash-screen')) {
-      splash.classList.add('hide');
-      setTimeout(removeSplash, 300);
+  // 淡出过渡结束后移除遮罩（保证整幅画面完整淡出）
+  splash.addEventListener('transitionend', function onFade(e) {
+    if (e.propertyName === 'opacity' && splash.classList.contains('hide')) {
+      splash.removeEventListener('transitionend', onFade);
+      removeSplash();
     }
-  }, 4000);
+  });
+
+  // 兜底：仅当动画完全没跑（hide 从未添加）时才强制收尾，避免截断正常淡出
+  setTimeout(function () {
+    var s = document.getElementById('splash-screen');
+    if (s && !s.classList.contains('hide')) {
+      s.classList.add('hide');
+      setTimeout(removeSplash, 400);
+    }
+  }, 6000);
 })();
