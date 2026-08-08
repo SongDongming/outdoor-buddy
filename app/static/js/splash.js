@@ -58,9 +58,9 @@
       lastChar.removeEventListener('animationend', onLast);
       splash.classList.add('settle');                                  // 标题上浮 + 地平线渐隐
       setTimeout(function () { splash.classList.add('subtitle-show'); }, 450); // 副标题淡入
-      // 完整画面（标题+副标题+背景）停留约1秒后，整体柔和淡出；
+      // 完整画面（含副标题）明确停顿约1.5秒后，整体柔和淡出；
       // 淡出完全结束后（transitionend）才移除，避免中途"突然消失"
-      setTimeout(function () { splash.classList.add('hide'); }, 2000);
+      setTimeout(function () { splash.classList.add('hide'); }, 2200);
     });
   }
 
