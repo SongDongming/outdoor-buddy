@@ -1641,7 +1641,7 @@ select:focus-visible, textarea:focus-visible {
   align-items: center;
   justify-content: center;
   opacity: 1;
-  transition: opacity 0.6s ease;
+  transition: opacity 0.6s cubic-bezier(0.4, 0, 0.2, 1);
 }
 .splash-screen.hide { opacity: 0; pointer-events: none; }
 
@@ -1739,23 +1739,28 @@ select:focus-visible, textarea:focus-visible {
   font-size: 46px;
   letter-spacing: 8px;
   color: #3f5138;
-  text-shadow: 0 2px 12px rgba(63, 81, 56, 0.12);
-  transition: transform 0.4s ease;
+  text-shadow: 0 2px 14px rgba(63, 81, 56, 0.14), 0 8px 30px rgba(63, 81, 56, 0.08);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.splash-screen.settle .splash-title { transform: translateY(-16px); }
+.splash-screen.settle .splash-title { transform: translateY(-16px) scale(1.02); }
 
-/* —— 单字踩落（压扁→回弹） —— */
+/* —— 单字踩落（坠落加速 → 落地压扁 → 回弹定格，模糊→清晰） —— */
 .splash-char {
   display: inline-block;
   opacity: 0;
   transform-origin: 50% 100%;
-  animation: splash-step 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+  animation: splash-step 0.55s linear forwards;
 }
 @keyframes splash-step {
-  0%   { opacity: 0; transform: translateY(-80px) scale(0.9, 1.25); }
-  55%  { opacity: 1; transform: translateY(0)    scale(0.92, 0.34); }
-  78%  { opacity: 1; transform: translateY(-10px) scale(1, 1.14); }
-  100% { opacity: 1; transform: translateY(0)    scale(1, 1); }
+  0%   { opacity: 0; transform: translateY(-85px) scale(0.9, 1.28); filter: blur(8px);
+         animation-timing-function: cubic-bezier(0.55, 0, 0.75, 0.35); }
+  45%  { opacity: 1; transform: translateY(-8px) scale(0.95, 1.1); filter: blur(0);
+         animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  60%  { opacity: 1; transform: translateY(0)    scale(0.93, 0.36); filter: blur(0);
+         animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  80%  { opacity: 1; transform: translateY(-8px) scale(1, 1.12); filter: blur(0);
+         animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); }
+  100% { opacity: 1; transform: translateY(0)    scale(1, 1); filter: blur(0); }
 }
 
 /* —— 副标题（flex 流内、标题正下方；随 hide 状态与整体画面同步淡出） —— */
@@ -1766,8 +1771,8 @@ select:focus-visible, textarea:focus-visible {
   letter-spacing: 2px;
   font-size: 15px;
   transform: translateY(10px);
-  /* 淡入、淡出复用同一套过渡曲线，和外层动画节奏对齐 */
-  transition: opacity 0.4s ease, transform 0.4s ease;
+  /* 淡入、淡出复用同一套丝滑过渡曲线，和外层动画节奏对齐 */
+  transition: opacity 0.45s cubic-bezier(0.4, 0, 0.2, 1), transform 0.45s cubic-bezier(0.4, 0, 0.2, 1);
   pointer-events: none;
 }
 .splash-screen.subtitle-show .splash-subtitle {
@@ -1783,17 +1788,17 @@ select:focus-visible, textarea:focus-visible {
 /* —— 落地尘土 —— */
 .splash-dust {
   position: fixed;
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 50%;
-  background: rgba(139, 111, 82, 0.4);
+  background: rgba(139, 111, 82, 0.32);
   pointer-events: none;
   z-index: 10000;
-  animation: splash-dust 0.6s ease-out forwards;
+  animation: splash-dust 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
 @keyframes splash-dust {
-  0%   { opacity: 0.85; transform: translate(0, 0) scale(1); }
-  100% { opacity: 0;    transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(0.35); }
+  0%   { opacity: 0.7; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0;   transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(0.3); }
 }
 
 @media (prefers-reduced-motion: reduce) {

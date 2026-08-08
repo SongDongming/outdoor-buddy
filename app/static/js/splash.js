@@ -25,6 +25,7 @@
   var chars = splash.querySelectorAll('.splash-char');
   var STEP_START = 0.4;   // 地平线铺开后第 1 字踩落
   var STEP_GAP = 0.15;    // 逐字间隔（加快弹出节奏）
+  var STEP_DURATION = 0.55; // 单字踩落动画时长（与 CSS splash-step 对齐）
 
   /** 在字符底部撒 3-5 颗尘土细粒，向两侧散开消失 */
   function spawnDust(charEl, count) {
@@ -43,13 +44,14 @@
 
   var lastChar = chars[chars.length - 1];
 
-  // 逐字设延迟；每个字踩落结束 → 撒尘土
+  // 逐字设延迟；在每字落地瞬间（动画约 60% 压扁触地）撒尘土
   Array.prototype.forEach.call(chars, function (ch, i) {
-    ch.style.animationDelay = (STEP_START + i * STEP_GAP) + 's';
-    ch.addEventListener('animationend', function onLand() {
-      ch.removeEventListener('animationend', onLand);
+    var delay = STEP_START + i * STEP_GAP;
+    ch.style.animationDelay = delay + 's';
+    var landMs = (delay + STEP_DURATION * 0.6) * 1000;
+    setTimeout(function () {
       spawnDust(ch, 3 + Math.floor(Math.random() * 3));
-    });
+    }, landMs);
   });
 
   // 最后一个字踩落结束 → 驱动"上浮 → 副标题 → 淡出"（放慢节奏）
