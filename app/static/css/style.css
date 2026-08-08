@@ -1627,3 +1627,95 @@ select:focus-visible, textarea:focus-visible {
   }
   html { scroll-behavior: auto; }
 }
+
+/* ============================================================
+   进站特效 — 用脚步丈量大地
+   大地色系 · 极简户外风 · 纯视觉 · 约1.6s
+   ============================================================ */
+.splash-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #efe9dd;            /* 大地米灰 */
+  opacity: 1;
+  transition: opacity 0.5s ease;
+}
+.splash-screen.hide { opacity: 0; pointer-events: none; }
+
+.splash-horizon {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 58%;
+  height: 2px;
+  background: #8b6f52;           /* 哑光土棕 */
+  opacity: 0.7;
+  transform: translateX(-50%) scaleX(0);
+  transform-origin: center;
+  animation: splash-horizon 0.3s ease-out forwards;
+  transition: opacity 0.3s ease;
+}
+@keyframes splash-horizon {
+  from { transform: translateX(-50%) scaleX(0); }
+  to   { transform: translateX(-50%) scaleX(1); }
+}
+.splash-screen.settle .splash-horizon { opacity: 0; }
+
+.splash-title {
+  display: flex;
+  gap: 10px;
+  font-family: 'Noto Serif SC', 'Playfair Display', serif;
+  font-weight: 700;
+  font-size: 46px;
+  letter-spacing: 6px;
+  color: #3f5138;                /* 深橄榄绿 */
+  transition: transform 0.3s ease;
+}
+.splash-screen.settle .splash-title { transform: translateY(-14px); }
+
+.splash-char {
+  display: inline-block;
+  opacity: 0;
+  transform-origin: 50% 100%;
+  animation: splash-step 0.45s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+@keyframes splash-step {
+  0%   { opacity: 0; transform: translateY(-72px) scale(0.9, 1.25); }
+  55%  { opacity: 1; transform: translateY(0)    scale(0.92, 0.34); }
+  78%  { opacity: 1; transform: translateY(-8px) scale(1, 1.14); }
+  100% { opacity: 1; transform: translateY(0)    scale(1, 1); }
+}
+
+.splash-subtitle {
+  margin-top: 28px;
+  font-size: 13px;
+  letter-spacing: 0.42em;
+  text-indent: 0.42em;
+  color: rgba(63, 81, 56, 0.62);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.splash-screen.subtitle-show .splash-subtitle { opacity: 1; }
+
+.splash-dust {
+  position: fixed;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: rgba(139, 111, 82, 0.4);
+  pointer-events: none;
+  z-index: 10000;
+  animation: splash-dust 0.5s ease-out forwards;
+}
+@keyframes splash-dust {
+  0%   { opacity: 0.85; transform: translate(0, 0) scale(1); }
+  100% { opacity: 0;    transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(0.35); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .splash-screen { transition-duration: 0.01ms; }
+}
