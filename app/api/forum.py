@@ -143,6 +143,30 @@ async def list_posts(
                 "created_at": str(r.created_at),
             }
 
+    # 批量获取每个帖子的前 2 条一级评论（列表页默认预览，无需展开）
+    preview_map = {}
+    if post_ids:
+        top_result = await db.execute(
+            select(ForumReply).options(selectinload(ForumReply.author))
+            .where(ForumReply.post_id.in_(post_ids), ForumReply.parent_id.is_(None))
+            .order_by(ForumReply.created_at)
+        )
+        top_replies = list(top_result.scalars().all())
+        liked_ids = await _get_liked_reply_ids(db, current_user.id if current_user else None, [r.id for r in top_replies])
+        for r in top_replies:
+            lst = preview_map.setdefault(r.post_id, [])
+            if len(lst) >= 2:
+                continue
+            lst.append({
+                "id": r.id, "post_id": r.post_id, "author_id": r.author_id,
+                "author_name": r.author.username if r.author else "未知",
+                "author_avatar_url": r.author.avatar_url if r.author else None,
+                "content": r.content, "images": r.images or [],
+                "parent_id": None, "reply_to_name": None,
+                "like_count": r.like_count or 0, "liked": r.id in liked_ids,
+                "created_at": str(r.created_at), "children": [],
+            })
+
     post_list = []
     for p in posts:
         d = ForumPostListItem.model_validate(p).model_dump()
@@ -150,6 +174,7 @@ async def list_posts(
         d["author_avatar_url"] = p.author.avatar_url if p.author else None
         d["category_name"] = p.category.name if p.category else "未分类"
         d["latest_reply"] = latest_replies.get(p.id)
+        d["preview_comments"] = preview_map.get(p.id, [])
         post_list.append(d)
 
     return ApiResponse(code=200, message="success", data={

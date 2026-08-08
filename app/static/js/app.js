@@ -177,9 +177,8 @@ document.addEventListener('alpine:init', () => {
     forumLightboxOpen: false, forumLightboxSrc: '',
     forumExpandedPosts: {},            // 帖子图片展开
     forumComments: {},                 // postId → 回复树（就地展开的评论）
-    forumCommentOpen: {},              // postId → 帖子评论区是否展开
+    forumCommentOpen: {},              // postId → 帖子评论区是否展开（默认只显示预览前2条）
     forumChildExpand: {},              // 'c'+commentId → 嵌套回复是否展开
-    forumCommentsShowAll: {},          // postId → 是否展开全部一级评论（默认预览前2条）
     forumCatId: null,
     forumCategories: [], forumPosts: [], forumTotal: 0, forumPage: 1,
     forumLoading: false,
@@ -761,18 +760,11 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       } catch(e) { this.toast('评论加载失败'); }
     },
     forumCommentsFlat(postId) {
-      // 把某帖回复树压平为 [{...r, depth}]，按 forumChildExpand['c'+id] 控制子层
-      // 一级评论默认只预览前 2 条，点"查看全部"后展示全部；嵌套回复保持点击展开
+      // 把某帖完整回复树压平为 [{...r, depth}]，按 forumChildExpand['c'+id] 控制子层
       const tree = this.forumComments[postId] || [];
-      const showAll = !!this.forumCommentsShowAll[postId];
-      const PREVIEW_TOP = 2;
       const out = [];
-      let topCount = 0;
       const walk = (nodes, depth) => {
         for (const n of nodes) {
-          const isTop = depth === 0;
-          if (isTop && !showAll && topCount >= PREVIEW_TOP) continue;
-          if (isTop) topCount++;
           out.push({ ...n, depth });
           if (n.children?.length && this.forumChildExpand['c' + n.id]) {
             walk(n.children, depth + 1);
@@ -782,12 +774,13 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       walk(tree, 0);
       return out;
     },
-    forumTopLevelCount(postId) {
-      // 该帖一级评论总数（供"查看全部 N 条评论"显示）
-      return (this.forumComments[postId] || []).length;
-    },
-    forumShowAllComments(postId) {
-      this.forumCommentsShowAll = { ...this.forumCommentsShowAll, [postId]: true };
+    forumDisplayComments(p) {
+      // 列表页评论展示：展开时显示完整树；未展开时显示列表接口自带的前 2 条一级评论预览
+      const postId = p.id;
+      if (this.forumCommentOpen[postId] && this.forumComments[postId]) {
+        return this.forumCommentsFlat(postId);
+      }
+      return (p.preview_comments || []).map(c => ({ ...c, depth: 0 }));
     },
     async forumCreatePost() {
       if (this.inFlight.forumCreate) return;
@@ -841,6 +834,11 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         this.forumReplyContent = '';
         this.forumReplyImages = [];
         this.forumReplyTarget = null;
+        // 展开帖子评论区 + 自动展开被回复评论的子层，让用户立刻看到新回复
+        this.forumCommentOpen = { ...this.forumCommentOpen, [postId]: true };
+        if (parentId) {
+          this.forumChildExpand = { ...this.forumChildExpand, ['c' + parentId]: true };
+        }
         await this.forumLoadComments(postId);
         await this.forumLoadPosts();
       } catch(e) { this.toast(e.message); }
@@ -949,16 +947,24 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       });
     },
     async forumToggleLike(r) {
-      // 点赞 / 取消点赞评论（更新对应帖的评论树）
+      // 点赞 / 取消点赞评论（同步更新完整评论树 + 列表页预览评论）
       if (!this.user) { this.toast('请先登录后点赞'); this.showAuth = true; return; }
       try {
         const res = await API.forum.likeReply(r.id);
         const { liked, like_count } = res.data;
         const postId = r.post_id;
-        this.forumComments = {
-          ...this.forumComments,
-          [postId]: this._patchReplyTree(this.forumComments[postId] || [], r.id, { liked, like_count }),
-        };
+        // 更新已加载的完整评论树
+        if (this.forumComments[postId]) {
+          this.forumComments = {
+            ...this.forumComments,
+            [postId]: this._patchReplyTree(this.forumComments[postId], r.id, { liked, like_count }),
+          };
+        }
+        // 更新列表页预览评论
+        this.forumPosts = this.forumPosts.map(p => {
+          if (p.id !== postId || !p.preview_comments) return p;
+          return { ...p, preview_comments: p.preview_comments.map(c => c.id === r.id ? { ...c, liked, like_count } : c) };
+        });
       } catch(e) { this.toast(e.message); }
     },
 

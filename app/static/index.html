@@ -610,10 +610,10 @@
                   <button class="feed-del-btn" @click.stop="forumTogglePin(p)" x-show="user?.role==='admin'" style="font-size:.7rem" x-text="p.is_pinned ? '📌 已置顶' : '📌 置顶'"></button>
                   <button class="feed-del-btn" @click.stop="forumDeletePost(p.id)" x-show="user && (user.id===p.author_id || user.role==='admin')">🗑</button>
                 </div>
-                <!-- 评论区（就地展开，抖音风格） -->
-                <div x-show="forumCommentOpen[p.id]" :id="'forum-comments-'+p.id" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-subtle)">
+                <!-- 评论区：默认显示预览前2条一级评论，展开后显示全部 -->
+                <div :id="'forum-comments-'+p.id" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-subtle)">
                   <div class="reply-list" style="padding-left:0">
-                    <template x-for="(r,idx) in forumCommentsFlat(p.id)" :key="'pc'+p.id+'-'+r.id">
+                    <template x-for="(r,idx) in forumDisplayComments(p)" :key="'pc'+p.id+'-'+r.id">
                       <div :style="'margin-left:' + (r.depth * 20) + 'px'">
                         <div class="reply-item" @click="openReplyTo(r)" :class="{selected: isReplySelected(r)}">
                           <div class="feed-avatar" style="width:26px;height:26px;font-size:.65rem;flex-shrink:0" :style="r.author_avatar_url ? 'background-image:url('+r.author_avatar_url+');background-size:cover;background-position:center' : ''" x-text="r.author_avatar_url ? '' : (r.author_name||'?')[0]?.toUpperCase()"></div>
@@ -648,16 +648,10 @@
                         </div>
                       </div>
                     </template>
-                    <div x-show="!forumCommentsFlat(p.id).length" style="color:var(--sage);font-size:.8rem;padding:8px 0">暂无评论，来抢沙发～</div>
+                    <div x-show="!forumDisplayComments(p).length" style="color:var(--sage);font-size:.8rem;padding:8px 0">暂无评论，来抢沙发～</div>
                   </div>
-                  <!-- 一级评论预览：默认显示前2条，点此查看全部 -->
-                  <div x-show="!forumCommentsShowAll[p.id] && forumTopLevelCount(p.id) > 2" style="text-align:center;margin-top:10px">
-                    <button class="btn btn-outline btn-sm" @click="forumShowAllComments(p.id)">
-                      查看全部 <span x-text="forumTopLevelCount(p.id)"></span> 条评论
-                    </button>
-                  </div>
-                  <!-- 帖子底部回复框（回复帖子本体） -->
-                  <div x-show="user && !isReplyingToComment()" style="margin-top:8px">
+                  <!-- 帖子底部回复框（回复帖子本体，仅展开时显示） -->
+                  <div x-show="forumCommentOpen[p.id] && user && !isReplyingToComment()" style="margin-top:8px">
                     <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的评论..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" @focus="openReplyToPost(p.id)" style="width:100%;font-size:.82rem"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px">
                       <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">发布评论</button>
@@ -869,8 +863,8 @@
   </div>
 </div>
 
-<script src="/static/js/api.js?v=3.6"></script>
-<script src="/static/js/app.js?v=4.4"></script>
+<script src="/static/js/api.js?v=5.0"></script>
+<script src="/static/js/app.js?v=5.2"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
 </body>
