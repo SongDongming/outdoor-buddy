@@ -23,8 +23,8 @@
   }
 
   var chars = splash.querySelectorAll('.splash-char');
-  var STEP_START = 0.5;   // 地平线铺开后第 1 字踩落（放慢）
-  var STEP_GAP = 0.2;     // 逐字间隔（步行节奏，放慢）
+  var STEP_START = 0.4;   // 地平线铺开后第 1 字踩落
+  var STEP_GAP = 0.15;    // 逐字间隔（加快弹出节奏）
 
   /** 在字符底部撒 3-5 颗尘土细粒，向两侧散开消失 */
   function spawnDust(charEl, count) {
@@ -58,9 +58,9 @@
       lastChar.removeEventListener('animationend', onLast);
       splash.classList.add('settle');                                  // 标题上浮 + 地平线渐隐
       setTimeout(function () { splash.classList.add('subtitle-show'); }, 450); // 副标题淡入
-      // 完整画面（含副标题）明确停顿约1.5秒后，整体柔和淡出；
+      // 完整画面（含副标题）明确停顿约1.5-1.7秒后，整体柔和淡出；
       // 淡出完全结束后（transitionend）才移除，避免中途"突然消失"
-      setTimeout(function () { splash.classList.add('hide'); }, 2200);
+      setTimeout(function () { splash.classList.add('hide'); }, 2600);
     });
   }
 
