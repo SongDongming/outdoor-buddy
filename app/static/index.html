@@ -602,14 +602,6 @@
                     <span x-text="'+'+(p.images.length-3)"></span>
                   </div>
                 </div>
-                <div class="feed-actions">
-                  <button class="feed-reply-btn" @click.stop="forumToggleComments(p)" style="border:none;background:none;cursor:pointer;color:var(--amber);font-weight:500;font-size:.8rem">
-                    💬 <span x-text="p.reply_count||0"></span> 条评论 <span x-text="forumCommentOpen[p.id] ? '▲' : '▼'"></span>
-                  </button>
-                  <button class="feed-reply-btn" @click.stop="openReplyToPost(p.id)" x-show="user" style="border:none;background:none;cursor:pointer;color:var(--amber);font-size:.8rem">↩ 回复</button>
-                  <button class="feed-del-btn" @click.stop="forumTogglePin(p)" x-show="user?.role==='admin'" style="font-size:.7rem" x-text="p.is_pinned ? '📌 已置顶' : '📌 置顶'"></button>
-                  <button class="feed-del-btn" @click.stop="forumDeletePost(p.id)" x-show="user && (user.id===p.author_id || user.role==='admin')">🗑</button>
-                </div>
                 <!-- 评论区：默认显示预览前2条一级评论，展开后显示全部 -->
                 <div :id="'forum-comments-'+p.id" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border-subtle)">
                   <div class="reply-list" style="padding-left:0">
@@ -652,12 +644,21 @@
                   </div>
                   <!-- 帖子底部回复框（回复帖子本体，仅展开时显示） -->
                   <div x-show="forumCommentOpen[p.id] && user && !isReplyingToComment()" style="margin-top:8px">
-                    <textarea class="form-input" x-model="forumReplyContent" placeholder="写下你的评论..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" @focus="openReplyToPost(p.id)" style="width:100%;font-size:.82rem"></textarea>
+                    <textarea :id="'forum-post-reply-textarea-'+p.id" class="form-input" x-model="forumReplyContent" placeholder="写下你的评论..." rows="2" @keydown.ctrl.enter="forumSubmitReply()" @keydown.meta.enter="forumSubmitReply()" @focus="openReplyToPost(p.id)" style="width:100%;font-size:.82rem"></textarea>
                     <div style="display:flex;gap:8px;margin-top:6px">
                       <button class="btn btn-amber btn-sm" @click="forumSubmitReply()" :disabled="inFlight.forumSubmitReply">发布评论</button>
                     </div>
                   </div>
                 </div>
+                <div class="feed-actions">
+                  <button class="feed-reply-btn" @click.stop="forumToggleComments(p)" style="border:none;background:none;cursor:pointer;color:var(--amber);font-weight:500;font-size:.8rem">
+                    💬 <span x-text="p.reply_count||0"></span> 条评论 <span x-text="forumCommentOpen[p.id] ? '▲' : '▼'"></span>
+                  </button>
+                  <button class="feed-reply-btn" @click.stop="openReplyToPost(p.id)" x-show="user" style="border:none;background:none;cursor:pointer;color:var(--amber);font-size:.8rem">↩ 回复</button>
+                  <button class="feed-del-btn" @click.stop="forumTogglePin(p)" x-show="user?.role==='admin'" style="font-size:.7rem" x-text="p.is_pinned ? '📌 已置顶' : '📌 置顶'"></button>
+                  <button class="feed-del-btn" @click.stop="forumDeletePost(p.id)" x-show="user && (user.id===p.author_id || user.role==='admin')">🗑</button>
+                </div>
+                
               </div>
             </div>
           </template>
@@ -864,7 +865,7 @@
 </div>
 
 <script src="/static/js/api.js?v=5.0"></script>
-<script src="/static/js/app.js?v=5.2"></script>
+<script src="/static/js/app.js?v=5.3"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
 </body>

@@ -919,15 +919,23 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         }
       });
     },
-    openReplyToPost(postId) {
-      // 回复帖子本体（顶层回复）
+    async openReplyToPost(postId) {
+      // 回复帖子本体（顶层回复）：自动展开帖子评论区，确保回复框可见并聚焦
       if (!this.user) {
         this.toast('请先登录后再回复');
         this.showAuth = true;
         return;
       }
+      if (!this.forumComments[postId]) {
+        await this.forumLoadComments(postId);
+      }
+      this.forumCommentOpen = { ...this.forumCommentOpen, [postId]: true };
       this.forumReplyTarget = { postId, parentId: null, replyToName: '' };
       this.forumReplyContent = '';
+      this.$nextTick(() => {
+        const ta = document.getElementById('forum-post-reply-textarea-' + postId);
+        if (ta) ta.focus();
+      });
     },
     isReplyingToComment() {
       // 是否正在回复某条评论（内联框显示判断）
