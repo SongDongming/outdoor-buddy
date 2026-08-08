@@ -27,18 +27,18 @@
   var STEP_GAP = 0.15;    // 逐字间隔（加快弹出节奏）
   var STEP_DURATION = 0.55; // 单字踩落动画时长（与 CSS splash-step 对齐）
 
-  /** 在字符底部撒 3-5 颗尘土细粒，向两侧散开消失 */
+  /** 在字符底部撒 5-7 颗尘土，扬起后向两侧散开消失（更明显） */
   function spawnDust(charEl, count) {
     var rect = charEl.getBoundingClientRect();
     for (var i = 0; i < count; i++) {
       var d = document.createElement('span');
       d.className = 'splash-dust';
-      d.style.left = (rect.left + rect.width / 2 + (Math.random() * 10 - 5)) + 'px';
+      d.style.left = (rect.left + rect.width / 2 + (Math.random() * 12 - 6)) + 'px';
       d.style.top = (rect.bottom - 1) + 'px';
-      d.style.setProperty('--dx', (Math.random() * 48 - 24) + 'px');
-      d.style.setProperty('--dy', (Math.random() * 14 + 5) + 'px');
+      d.style.setProperty('--dx', (Math.random() * 72 - 36) + 'px');
+      d.style.setProperty('--dy', (Math.random() * 20 + 6) + 'px');
       document.body.appendChild(d);
-      (function (el) { setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 650); })(d);
+      (function (el) { setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 900); })(d);
     }
   }
 
@@ -50,7 +50,7 @@
     ch.style.animationDelay = delay + 's';
     var landMs = (delay + STEP_DURATION * 0.6) * 1000;
     setTimeout(function () {
-      spawnDust(ch, 3 + Math.floor(Math.random() * 3));
+      spawnDust(ch, 5 + Math.floor(Math.random() * 3));
     }, landMs);
   });
 

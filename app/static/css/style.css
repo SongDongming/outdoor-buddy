@@ -1788,17 +1788,20 @@ select:focus-visible, textarea:focus-visible {
 /* —— 落地尘土 —— */
 .splash-dust {
   position: fixed;
-  width: 3px;
-  height: 3px;
+  width: 5px;
+  height: 5px;
   border-radius: 50%;
-  background: rgba(139, 111, 82, 0.32);
+  background: rgba(139, 111, 82, 0.55);
+  box-shadow: 0 0 4px rgba(139, 111, 82, 0.35);
   pointer-events: none;
   z-index: 10000;
-  animation: splash-dust 0.7s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+  animation: splash-dust 0.75s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
 }
+/* 扬起 → 散开 → 淡出（更明显的落地尘雾） */
 @keyframes splash-dust {
-  0%   { opacity: 0.7; transform: translate(0, 0) scale(1); }
-  100% { opacity: 0;   transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(0.3); }
+  0%   { opacity: 0.85; transform: translate(0, 0) scale(1); }
+  35%  { opacity: 0.7;  transform: translate(calc(var(--dx, 0px) * 0.4), calc(var(--dy, 0px) * 0.4 - 14px)) scale(1.25); }
+  100% { opacity: 0;    transform: translate(var(--dx, 0px), var(--dy, 0px)) scale(0.3); }
 }
 
 @media (prefers-reduced-motion: reduce) {
