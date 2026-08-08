@@ -35,8 +35,8 @@
       d.className = 'splash-dust';
       d.style.left = (rect.left + rect.width / 2 + (Math.random() * 12 - 6)) + 'px';
       d.style.top = (rect.bottom - 1) + 'px';
-      d.style.setProperty('--dx', (Math.random() * 72 - 36) + 'px');
-      d.style.setProperty('--dy', (Math.random() * 20 + 6) + 'px');
+      d.style.setProperty('--dx', (Math.random() * 104 - 52) + 'px');
+      d.style.setProperty('--dy', (Math.random() * 28 + 8) + 'px');
       document.body.appendChild(d);
       (function (el) { setTimeout(function () { if (el.parentNode) el.parentNode.removeChild(el); }, 900); })(d);
     }
