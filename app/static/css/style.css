@@ -1762,7 +1762,7 @@ select:focus-visible, textarea:focus-visible {
   font-size: 13px;
   letter-spacing: 0.42em;
   text-indent: 0.42em;
-  color: rgba(63, 81, 56, 0.62);
+  color: rgba(63, 81, 56, 0.88);
   opacity: 0;
   transition: opacity 0.4s ease;
 }
