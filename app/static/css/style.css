@@ -1641,7 +1641,7 @@ select:focus-visible, textarea:focus-visible {
   align-items: center;
   justify-content: center;
   opacity: 1;
-  transition: opacity 0.9s ease;
+  transition: opacity 0.6s ease;
 }
 .splash-screen.hide { opacity: 0; pointer-events: none; }
 
@@ -1756,17 +1756,29 @@ select:focus-visible, textarea:focus-visible {
   100% { opacity: 1; transform: translateY(0)    scale(1, 1); }
 }
 
-/* —— 副标题 —— */
+/* —— 副标题（随 hide 状态与整体画面同步淡出） —— */
 .splash-subtitle {
-  margin-top: 30px;
-  font-size: 13px;
-  letter-spacing: 0.42em;
-  text-indent: 0.42em;
-  color: rgba(63, 81, 56, 0.88);
+  position: absolute;
+  left: 50%;
+  top: 65%;
+  transform: translateX(-50%) translateY(10px);
   opacity: 0;
-  transition: opacity 0.4s ease;
+  color: #8a7a62;
+  letter-spacing: 2px;
+  font-size: 15px;
+  /* 淡入、淡出复用同一套过渡曲线，和外层动画节奏对齐 */
+  transition: opacity 0.4s ease, transform 0.4s ease;
+  pointer-events: none;
 }
-.splash-screen.subtitle-show .splash-subtitle { opacity: 1; }
+.splash-screen.subtitle-show .splash-subtitle {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+/* 顶层容器触发 hide 时，副标题同步反向退场，和整体画面同步变淡上飘 */
+.splash-screen.hide .splash-subtitle {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-8px);
+}
 
 /* —— 落地尘土 —— */
 .splash-dust {

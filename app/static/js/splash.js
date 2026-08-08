@@ -65,8 +65,9 @@
   }
 
   // 淡出过渡结束后移除遮罩（保证整幅画面完整淡出）
+  // 限定触发对象必须是最外层容器，拦截子元素（如副标题）冒泡事件
   splash.addEventListener('transitionend', function onFade(e) {
-    if (e.propertyName === 'opacity' && splash.classList.contains('hide')) {
+    if (e.target === splash && e.propertyName === 'opacity' && splash.classList.contains('hide')) {
       splash.removeEventListener('transitionend', onFade);
       removeSplash();
     }
