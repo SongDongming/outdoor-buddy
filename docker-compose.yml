@@ -52,6 +52,7 @@ services:
       - ./app/services:/app/app/services
       - ./app/models:/app/app/models
       - ./app/schemas:/app/app/schemas
+      - ./app/data:/app/app/data
     depends_on:
       db:
         condition: service_healthy

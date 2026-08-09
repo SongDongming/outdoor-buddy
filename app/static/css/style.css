@@ -34,6 +34,7 @@
 
   /* Legacy aliases — for inline styles in HTML */
   --sage:          #88998b;
+  --heart-empty:   #e3e9e4;
   --deep-forest:   #1a241e;
   --primary:       #2ea898;
   --sand:          rgba(0, 0, 0, 0.08);
@@ -461,6 +462,17 @@ select:focus-visible, textarea:focus-visible {
   align-items: center;
   justify-content: space-between;
 }
+
+/* QA 页面背景图 —— 浅色户外插画背景，铺满内容区 */
+.page-bg {
+  position: relative;
+  flex: 1;
+  min-height: calc(100vh);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+.page-bg-qa { background-image: url('/static/img/backgrounds/bg-qa.png'); }
 .page-header h2 {
   font-family: 'Playfair Display', serif;
   font-size: 1.65rem;
@@ -857,18 +869,23 @@ select:focus-visible, textarea:focus-visible {
   border-radius: 16px;
   font-size: 0.88rem;
   line-height: 1.55;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
 }
 .chat-msg.user {
   align-self: flex-end;
-  background: linear-gradient(135deg, rgba(212,120,32,0.15), rgba(212,120,32,0.06));
+  background: linear-gradient(135deg, rgba(212,120,32,0.20), rgba(212,120,32,0.07));
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   color: var(--text-primary);
   border-bottom-right-radius: 4px;
-  border: 1px solid rgba(212,120,32,0.15);
+  border: 1px solid rgba(212,120,32,0.18);
 }
 .chat-msg.assistant {
   align-self: flex-start;
-  background: var(--bg-card);
-  border: 1px solid var(--border-card);
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(0,0,0,0.06);
   border-bottom-left-radius: 4px;
   color: var(--text-primary);
 }
@@ -886,10 +903,7 @@ select:focus-visible, textarea:focus-visible {
   display: flex;
   gap: 10px;
   padding: 16px 48px;
-  border-top: 1px solid var(--border-subtle);
-  background: rgba(238,242,235,0.85);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  /* 无背景：背景图完全透出，仅输入框与发送按钮自身保留底色 */
 }
 .chat-input-bar input {
   flex: 1;
@@ -1017,6 +1031,33 @@ select:focus-visible, textarea:focus-visible {
   from { opacity: 0; transform: translateY(12px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* 下载状态指示器（右下角，位于 toast 上方） */
+.download-status {
+  position: fixed;
+  bottom: 84px; right: 30px;
+  z-index: 998;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-deep);
+  color: #fff;
+  padding: 10px 16px;
+  border-radius: 12px;
+  font-size: 0.82rem;
+  border: 1px solid rgba(255,255,255,0.10);
+  box-shadow: var(--shadow-elevated);
+  animation: slideUp 0.3s cubic-bezier(.34,1.56,.64,1);
+}
+.download-spinner {
+  width: 14px; height: 14px;
+  border: 2px solid rgba(255,255,255,0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  flex-shrink: 0;
+  animation: download-spin 0.7s linear infinite;
+}
+@keyframes download-spin { to { transform: rotate(360deg); } }
 
 /* ============================================================
    Loading & Skeleton
@@ -1322,6 +1363,25 @@ select:focus-visible, textarea:focus-visible {
   color: var(--text-secondary);
 }
 .feed-del-btn:hover { opacity: 1; color: var(--danger); }
+
+/* 评论操作按钮（点赞/回复/举报/删除）——统一尺寸，同比缩放 */
+.comment-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  padding: 4px 7px;
+  border-radius: 6px;
+  line-height: 1;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.comment-action svg { transition: fill 0.15s ease, stroke 0.15s ease; }
+.comment-action:hover { background: rgba(0,0,0,0.05); color: var(--amber); }
+.comment-action.liked { color: var(--amber); font-weight: 600; }
 
 /* Feed images */
 .feed-images { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }

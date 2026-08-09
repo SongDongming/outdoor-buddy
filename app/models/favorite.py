@@ -1,7 +1,7 @@
 """
 收藏模型定义
 """
-from sqlalchemy import Column, Integer, String, DateTime, JSON
+from sqlalchemy import Column, Integer, String, DateTime, JSON, Index
 from sqlalchemy.sql import func
 from app.models.database import Base
 
@@ -15,3 +15,4 @@ class Favorite(Base):
     title = Column(String(200), nullable=True)
     content = Column(JSON, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
+    __table_args__ = (Index("ix_favorites_user_type_created", "user_id", "fav_type", "created_at"),)

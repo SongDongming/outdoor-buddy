@@ -78,13 +78,14 @@ async def redis_set(key: str, value: str, ttl: int) -> bool:
 
 
 async def redis_incr(key: str, ttl: int) -> Optional[int]:
-    """自增并设 TTL，返回计数；失败返回 None"""
+    """自增并设 TTL（Lua 原子操作），返回计数；失败返回 None"""
     if not _available or _redis is None:
         return None
     try:
-        count = await _redis.incr(key)
-        await _redis.expire(key, ttl)
-        return count
+        # 首次自增时一并设 TTL，避免崩溃后计数器残留无过期
+        lua = "local c = redis.call('incr', KEYS[1]); if c == 1 then redis.call('expire', KEYS[1], ARGV[1]) end; return c"
+        count = await _redis.eval(lua, 1, key, ttl)
+        return int(count)
     except Exception:
         return None
 

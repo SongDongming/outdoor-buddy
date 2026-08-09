@@ -33,6 +33,11 @@ async function api(method, path, body=null, options={}){
       try { data = JSON.parse(text); }
       catch { data = { detail: text || '服务器返回了无效数据' }; }
       if (!res.ok) {
+        // 401：令牌失效/过期 → 全局清 token 并通知应用刷新登录态
+        if (res.status === 401) {
+          clearToken();
+          window.dispatchEvent(new CustomEvent('app:unauthorized'));
+        }
         const err = new Error(data.detail || data.message || '请求失败');
         err.status = res.status;
         throw err;
@@ -122,6 +127,7 @@ const API = {
     deleteReply: (id) => api('DELETE',`/forum/replies/${id}`),
     getReplies: (postId) => api('GET',`/forum/posts/${postId}/replies`),
     likeReply: (id) => api('POST',`/forum/replies/${id}/like`),
+    likePost: (id) => api('POST',`/forum/posts/${id}/like`),
     pinPost: (id) => api('POST',`/forum/posts/${id}/pin`),
     createCategory: (data) => api('POST','/forum/categories',data),
     deleteCategory: (id) => api('DELETE',`/forum/categories/${id}`),
@@ -146,6 +152,15 @@ const API = {
       if (!res.ok) throw new Error(data.detail || '上传失败');
       return data;
     },
+  },
+  moderation: {
+    report: (data) => api('POST', '/moderation/report', data),
+    queue: (params) => {
+      let url = '/moderation/queue?status=' + (params?.status || 'pending');
+      if (params?.type) url += '&target_type=' + params.type;
+      return api('GET', url);
+    },
+    resolve: (id, action, ban) => api('POST', `/moderation/resolve/${id}`, { action, ban_user: !!ban }),
   },
 };
 
@@ -182,7 +197,10 @@ async function streamEvent(path, body, onEvent, timeout = 180000){
         if (!line) continue;
         const data = line.slice(5).trim();
         if (data === '[DONE]') return;
-        try { onEvent(JSON.parse(data)); } catch (e) { /* 忽略无法解析的事件 */ }
+        // 只容错 JSON 解析；onEvent 的异常（如 error 事件抛错）向上传播，让调用方感知失败
+        let ev;
+        try { ev = JSON.parse(data); } catch (e) { continue; }
+        onEvent(ev);
       }
     }
   } catch (e) {

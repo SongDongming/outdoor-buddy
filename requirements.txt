@@ -17,3 +17,8 @@ langgraph>=0.3.0
 langchain-core>=0.3.0
 langchain-openai>=0.3.0
 redis>=5.0
+onnxruntime>=1.18.0
+pillow>=10.0.0
+numpy>=1.24.0
+opennsfw-onnx==0.1.0
+weasyprint>=62.0

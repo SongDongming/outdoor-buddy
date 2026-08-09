@@ -23,13 +23,15 @@ class ForumPost(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     title = Column(String(200), nullable=False)
     content = Column(Text, nullable=False)
-    category_id = Column(Integer, ForeignKey("forum_categories.id"))
+    category_id = Column(Integer, ForeignKey("forum_categories.id"), index=True)
     author_id = Column(Integer, ForeignKey("users.id"))
     images = Column(JSON, default=[])
     view_count = Column(Integer, default=0)
     reply_count = Column(Integer, default=0)
+    like_count = Column(Integer, default=0)
     is_pinned = Column(Boolean, default=False)
-    created_at = Column(DateTime, server_default=func.now())
+    is_hidden = Column(Boolean, default=False)  # 内容审核隐藏（软删除，可恢复）
+    created_at = Column(DateTime, server_default=func.now(), index=True)
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
     category = relationship("ForumCategory", back_populates="posts")
     author = relationship("User")
@@ -40,11 +42,12 @@ class ForumReply(Base):
     __tablename__ = "forum_replies"
     id = Column(Integer, primary_key=True, autoincrement=True)
     content = Column(Text, nullable=False)
-    post_id = Column(Integer, ForeignKey("forum_posts.id", ondelete="CASCADE"))
+    post_id = Column(Integer, ForeignKey("forum_posts.id", ondelete="CASCADE"), index=True)
     author_id = Column(Integer, ForeignKey("users.id"))
     images = Column(JSON, default=[])
-    parent_id = Column(Integer, ForeignKey("forum_replies.id", ondelete="CASCADE"), nullable=True, default=None)
+    parent_id = Column(Integer, ForeignKey("forum_replies.id", ondelete="CASCADE"), nullable=True, default=None, index=True)
     like_count = Column(Integer, default=0)
+    is_hidden = Column(Boolean, default=False)  # 内容审核隐藏（软删除，可恢复）
     created_at = Column(DateTime, server_default=func.now())
     post = relationship("ForumPost", back_populates="replies")
     author = relationship("User")
@@ -59,3 +62,13 @@ class ForumReplyLike(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     created_at = Column(DateTime, server_default=func.now())
     __table_args__ = (UniqueConstraint("reply_id", "user_id", name="uq_forum_reply_like"),)
+
+
+class ForumPostLike(Base):
+    """帖子点赞记录（唯一约束: 同一用户对同一帖子只点赞一次）"""
+    __tablename__ = "forum_post_likes"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    post_id = Column(Integer, ForeignKey("forum_posts.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    created_at = Column(DateTime, server_default=func.now())
+    __table_args__ = (UniqueConstraint("post_id", "user_id", name="uq_forum_post_like"),)

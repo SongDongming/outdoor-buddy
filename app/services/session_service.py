@@ -15,10 +15,22 @@ from app.utils.logger import logger
 _memory_cache: dict[str, dict] = {}
 # 会话上下文 TTL（24 小时）
 _SESSION_TTL = 24 * 3600
+# 内存缓存上限（防恶意 session_id 无限膨胀）
+_MEMORY_CACHE_MAX = 5000
 
 
 def _session_key(session_id: str) -> str:
     return f"session:{session_id}"
+
+
+def _cache_put(session_id: str, data: dict) -> None:
+    """写入内存缓存；超上限时淘汰最早插入的键（dict 保持插入序）"""
+    if len(_memory_cache) >= _MEMORY_CACHE_MAX and session_id not in _memory_cache:
+        try:
+            _memory_cache.pop(next(iter(_memory_cache)))
+        except StopIteration:
+            pass
+    _memory_cache[session_id] = data
 
 
 async def get_session_context(session_id: str, db: AsyncSession) -> list[dict]:
@@ -51,7 +63,7 @@ async def get_session_context(session_id: str, db: AsyncSession) -> list[dict]:
             "query_results": session.context_data.get("query_results", {}),
         }
         # 同步到内存缓存和 Redis
-        _memory_cache[session_id] = data
+        _cache_put(session_id, data)
         await redis_set(_session_key(session_id), json.dumps(data, ensure_ascii=False), _SESSION_TTL)
         return context
 
@@ -75,11 +87,11 @@ async def update_session_context(
 
     # Redis 优先
     if await redis_set(_session_key(session_id), json.dumps(data, ensure_ascii=False), _SESSION_TTL):
-        _memory_cache[session_id] = data
+        _cache_put(session_id, data)
         return
 
     # DB 兜底
-    _memory_cache[session_id] = data
+    _cache_put(session_id, data)
     try:
         result = await db.execute(
             select(SessionContext).where(SessionContext.session_id == session_id)

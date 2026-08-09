@@ -8,6 +8,13 @@ RUN pip install --user --no-cache-dir -r requirements.txt -i https://pypi.tuna.t
 FROM python:3.12-slim
 WORKDIR /app
 
+# weasyprint 系统依赖（pango/cairo）+ 中文字体 + emoji 字体（PDF 导出）
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
+    libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info \
+    fonts-noto-cjk fonts-noto-color-emoji \
+    && rm -rf /var/lib/apt/lists/*
+
 # Copy installed packages from builder
 COPY --from=builder /root/.local /root/.local
 ENV PATH=/root/.local/bin:$PATH

@@ -166,6 +166,72 @@ async def ensure_forum_reply_like_column() -> None:
         logger.warning(f"[MIGRATE] forum_replies.like_count 迁移跳过: {e}")
 
 
+async def ensure_moderation_columns() -> None:
+    """
+    幂等迁移：内容审核相关列 + moderation_records 表
+    - forum_posts / forum_replies 补 is_hidden
+    - users 补 is_banned / banned_until / violation_count
+    - 建 moderation_records 表（新表用 CREATE TABLE IF NOT EXISTS）
+    """
+    from sqlalchemy import text
+    engine = _get_engine()
+
+    column_migrations = [
+        ("forum_posts", "is_hidden", "BOOLEAN DEFAULT false"),
+        ("forum_posts", "like_count", "INTEGER DEFAULT 0"),
+        ("forum_replies", "is_hidden", "BOOLEAN DEFAULT false"),
+        ("users", "is_banned", "BOOLEAN DEFAULT false"),
+        ("users", "banned_until", "TIMESTAMP WITH TIME ZONE"),
+        ("users", "violation_count", "INTEGER DEFAULT 0"),
+    ]
+    for table, column, ddl in column_migrations:
+        # PG: IF NOT EXISTS；SQLite: 直接加，重复列会报错则跳过
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN IF NOT EXISTS {column} {ddl}"))
+            logger.debug(f"[MIGRATE] {table}.{column} 就绪")
+            continue
+        except Exception:
+            pass
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}"))
+            logger.info(f"[MIGRATE] {table}.{column} 已补充")
+        except Exception as e:
+            logger.debug(f"[MIGRATE] {table}.{column} 已存在，跳过: {e}")
+
+    # 建审核记录表（幂等）：交给 SQLAlchemy metadata 生成方言正确的 DDL
+    # （init_db 的 create_all 已覆盖；此处兜底确保表存在，兼容模型注册顺序异常）
+    try:
+        from app.models.moderation import ModerationRecord  # noqa: F401  确保模型注册
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        logger.info("[MIGRATE] moderation_records 表就绪")
+    except Exception as e:
+        logger.warning(f"[MIGRATE] moderation_records 建表跳过: {e}")
+
+
+async def ensure_forum_indexes() -> None:
+    """幂等迁移：为论坛/收藏热查询补索引（CREATE INDEX IF NOT EXISTS）"""
+    from sqlalchemy import text
+    engine = _get_engine()
+    index_sql = [
+        ("ix_forum_replies_post_id", "forum_replies", "post_id"),
+        ("ix_forum_replies_parent_id", "forum_replies", "parent_id"),
+        ("ix_forum_posts_category_id", "forum_posts", "category_id"),
+        ("ix_forum_posts_created_at", "forum_posts", "created_at"),
+        ("ix_forum_posts_is_pinned_created", "forum_posts", "is_pinned, created_at"),
+        ("ix_favorites_user_type_created", "favorites", "user_id, fav_type, created_at"),
+    ]
+    for idx, table, cols in index_sql:
+        try:
+            async with engine.begin() as conn:
+                await conn.execute(text(f"CREATE INDEX IF NOT EXISTS {idx} ON {table} ({cols})"))
+            logger.info(f"[MIGRATE] 索引 {idx} 就绪")
+        except Exception as e:
+            logger.debug(f"[MIGRATE] 索引 {idx} 跳过: {e}")
+
+
 async def close_db() -> None:
     """关闭数据库连接"""
     if _engine:

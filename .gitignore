@@ -41,7 +41,8 @@ app/static/img/avatars/*
 app/static/img/uploads/*
 !app/static/img/avatars/.gitkeep
 !app/static/img/uploads/.gitkeep
-data/
+# 仅忽略项目根目录的 data（存储挂载），app/data 下的内容审核词库需入库
+/data/
 
 # Claude Code
 .claude/

@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Outdoor Buddy — 户外徒步助手</title>
-<link rel="stylesheet" href="/static/css/style.css?v=4.4">
+<link rel="icon" type="image/png" href="/static/img/logo-favicon.png?v=3">
+<link rel="stylesheet" href="/static/css/style.css?v=5.4">
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js"></script>
 </head>
 <body x-data="app" x-init="init()">
@@ -200,12 +201,12 @@
       <div x-show="routeResults" style="font-size:.78rem;color:var(--sage)">上次结果已保留</div>
     </div>
     <div style="padding:0 40px">
-      <div style="display:flex;gap:10px;max-width:500px;margin-bottom:16px">
+      <div style="display:flex;gap:10px;max-width:500px;margin-bottom:12px">
         <input class="form-input" placeholder="搜索徒步路线..." x-model="routeKeyword" @keydown.enter="searchRoute()" maxlength="100"
                x-effect="page==='route' && $nextTick(() => $el.focus())">
         <button class="btn btn-primary" @click="searchRoute()" :disabled="inFlight.searchRoute">搜索</button>
       </div>
-      <div class="chip-row">
+      <div class="chip-row" style="margin-bottom:16px">
         <span class="chip" @click="searchRoute('武功山')">武功山</span>
         <span class="chip" @click="searchRoute('雨崩')">雨崩</span>
         <span class="chip" @click="searchRoute('虎跳峡')">虎跳峡</span>
@@ -245,21 +246,13 @@
     </div>
     <!-- 搜索结果（无路线时） -->
     <div x-show="routeResults && (!routeResults.routes || routeResults.routes.length === 0)" class="empty-state">
-      <div class="empty-icon">🏔️</div>
       <h3>未找到路线</h3>
       <p>请尝试其他关键词</p>
     </div>
-    <!-- 初始空状态 -->
+    <!-- 初始空状态（背景图铺底，仅保留文字） -->
     <div x-show="!routeResults && !loading.route" class="empty-state">
-      <div class="empty-icon">🏔️</div>
       <h3>探索徒步路线</h3>
       <p>输入关键词搜索全国热门徒步路线，获取结构化轨迹数据、AI 分析与安全评估</p>
-      <div class="empty-hints">
-        <span class="empty-hint" @click="searchRoute('武功山')">🏕️ 武功山</span>
-        <span class="empty-hint" @click="searchRoute('雨崩')">⛰️ 雨崩</span>
-        <span class="empty-hint" @click="searchRoute('虎跳峡')">🏞️ 虎跳峡</span>
-        <span class="empty-hint" @click="searchRoute('四姑娘山')">🗻 四姑娘山</span>
-      </div>
     </div>
   </div>
 
@@ -329,19 +322,14 @@
             <button class="btn btn-outline btn-sm" @click="addFavorite('equipment','装备方案',equipResults)" :disabled="inFlight.addFavorite">收藏</button>
             <button class="btn btn-outline btn-sm" @click="exportContent('equipment',equipResults)">导出文本</button>
             <button class="btn btn-amber btn-sm" @click="downloadEquipPoster()">下载海报</button>
+            <button class="btn btn-amber btn-sm" @click="downloadEquipPdf()">下载 PDF</button>
           </div>
         </div>
       </div>
     </template>
     <div x-show="!equipResults && !loading.equipment" class="empty-state">
-      <div class="empty-icon">🎒</div>
       <h3>智能装备推荐</h3>
       <p>选择徒步模式和参数，EquipmentAgent 基于路线特征自动匹配专属装备方案</p>
-      <div class="empty-hints">
-        <span class="empty-hint" @click="equipMode='light';equipDays=1;recommendEquip()">🥾 轻装一日</span>
-        <span class="empty-hint" @click="equipMode='heavy';equipDays=3;recommendEquip()">🏕️ 重装三日</span>
-        <span class="empty-hint" @click="equipMode='light';equipDays=5;recommendEquip()">🗺️ 轻装五日</span>
-      </div>
     </div>
   </div>
 
@@ -373,7 +361,6 @@
         </div>
     </div>
     <div x-show="page==='ticket' && !ticketResults?.tickets?.length && !loading.ticket" class="empty-state">
-      <div class="empty-icon">🚂</div>
       <h3>交通票务查询</h3>
       <p x-show="ticketResults?.error_msg" style="color:var(--amber);margin-bottom:8px" x-text="ticketResults.error_msg"></p>
       <p>对接 12306 MCP 服务，输入出发城市、目的城市和出行日期，实时查询火车票信息</p>
@@ -412,7 +399,6 @@
         <div class="card" style="margin-top:12px" x-show="weatherResults.equipment_advice"><div class="card-title">装备调整建议</div><div class="md-content" x-html="md(weatherResults.equipment_advice)"></div></div>
       </div>
     <div x-show="page==='weather' && !weatherResults?.forecast?.length && !loading.weather" class="empty-state">
-      <div class="empty-icon">🌤️</div>
       <h3>天气查询</h3>
       <p>对接天气 MCP 服务，输入徒步地点获取实时天气、7天预报与出行可行性评估</p>
     </div>
@@ -517,11 +503,11 @@
             <div class="action-row" style="padding-bottom:24px">
               <button class="btn btn-amber btn-sm" @click="addFavorite('plan','行程预案 - '+planSearchKw,planResults)" :disabled="inFlight.addFavorite">收藏预案</button>
               <button class="btn btn-outline btn-sm" @click="downloadPlan()">下载海报</button>
+              <button class="btn btn-amber btn-sm" @click="downloadPlanPdf()">下载 PDF</button>
             </div>
           </div>
         </div>
         <div x-show="page==='plan' && !planResults && !loading.plan" class="empty-state">
-          <div class="empty-icon">📋</div>
           <p>完成左侧步骤后点击生成按钮</p>
         </div>
       </div>
@@ -529,7 +515,7 @@
   </div>
 
   <!-- ====== QA PAGE ====== -->
-  <div x-show="page==='qa'" x-transition class="qa-page">
+  <div x-show="page==='qa'" x-transition class="qa-page page-bg page-bg-qa">
     <canvas class="qa-canvas" id="qaCanvas"></canvas>
     <div class="page-header" style="position:relative;z-index:1"><h2>智能问答</h2></div>
     <div class="chat-area">
@@ -597,6 +583,84 @@
         </template>
       </div>
 
+      <!-- 审核中心（admin） -->
+      <div x-show="user?.role==='admin'" style="margin-bottom:14px">
+        <button class="btn btn-outline btn-sm" @click="toggleModQueue()">
+          <span x-text="modQueueOpen ? '收起审核中心 ▲' : '🛡 审核中心'"></span>
+          <span x-show="modQueueTotal>0" style="background:var(--danger);color:#fff;border-radius:10px;padding:0 6px;font-size:.68rem;margin-left:4px" x-text="modQueueTotal"></span>
+        </button>
+        <template x-if="modQueueOpen">
+          <div style="margin-top:10px;border:1px solid var(--border-subtle);border-radius:10px;padding:12px">
+            <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">
+              <select class="form-select" style="max-width:120px" x-model="modQueueFilter.status" @change="loadModQueue()">
+                <option value="pending">待处理</option>
+                <option value="all">全部</option>
+                <option value="resolved_hidden">已隐藏</option>
+                <option value="resolved_deleted">已删除</option>
+                <option value="resolved_ignored">已忽略</option>
+              </select>
+              <select class="form-select" style="max-width:110px" x-model="modQueueFilter.type" @change="loadModQueue()">
+                <option value="">全部类型</option>
+                <option value="post">帖子</option>
+                <option value="reply">回复</option>
+                <option value="avatar">头像</option>
+              </select>
+              <span style="font-size:.8rem;color:var(--sage)" x-text="'共 '+modQueueTotal+' 条'"></span>
+            </div>
+            <div x-show="modQueueLoading" class="loading-pulse" style="padding:10px 0">加载中...</div>
+            <div x-show="!modQueueLoading && !modQueue.length" style="color:var(--sage);font-size:.85rem;padding:12px 0">🎉 暂无待处理内容</div>
+            <template x-for="rec in modQueue" :key="rec.id">
+              <div style="border:1px solid var(--border-subtle);border-radius:8px;padding:10px 12px;margin-bottom:8px">
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:.78rem">
+                  <span x-text="modSourceLabel(rec)" style="background:var(--warm-stone);border-radius:4px;padding:1px 6px"></span>
+                  <span style="font-weight:600" x-text="modTargetLabel(rec)+' #'+rec.target_id"></span>
+                  <span x-show="rec.source==='report'" style="color:var(--sage)">举报人: <span x-text="rec.reporter_name||'未知'"></span></span>
+                  <span x-show="rec.source==='report' && rec.report_reason" x-text="'原因: '+rec.report_reason"></span>
+                  <span x-show="modScoreText(rec)" x-text="modScoreText(rec)" style="color:var(--danger)"></span>
+                  <span style="color:var(--sage)" x-text="modTime(rec.created_at)"></span>
+                  <span style="margin-left:auto;color:var(--amber);cursor:pointer;font-size:.75rem" @click="toggleModExpand(rec.id)" x-text="modExpand[rec.id] ? '收起 ▲' : '查看详情 ▾'"></span>
+                </div>
+                <div x-show="modExpand[rec.id]" style="margin-top:8px;font-size:.8rem">
+                  <template x-if="rec.target">
+                    <div>
+                      <div x-show="rec.target.kind==='post'">
+                        <div x-text="'作者: '+(rec.target.author_name||'未知')" style="color:var(--sage)"></div>
+                        <div style="font-weight:600" x-text="rec.target.title||'（无标题）'"></div>
+                        <div x-html="md(rec.target.content||'')" class="md-content" style="margin:4px 0"></div>
+                      </div>
+                      <div x-show="rec.target.kind==='reply'">
+                        <div x-text="'作者: '+(rec.target.author_name||'未知')" style="color:var(--sage)"></div>
+                        <div x-html="md(rec.target.content||'')" class="md-content" style="margin:4px 0"></div>
+                      </div>
+                      <div x-show="rec.target.kind==='avatar'">
+                        <div x-text="'用户: '+(rec.target.username||'未知')" style="color:var(--sage)"></div>
+                        <img x-show="rec.target.avatar_url" :src="rec.target.avatar_url" style="width:56px;height:56px;border-radius:50%;object-fit:cover;margin-top:4px">
+                      </div>
+                      <div x-show="rec.target.images?.length" style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+                        <template x-for="(img,i) in rec.target.images" :key="'mod-'+rec.id+'-'+i">
+                          <img :src="img" style="width:64px;height:64px;object-fit:cover;border-radius:6px" @click="forumOpenLightbox(img)">
+                        </template>
+                      </div>
+                      <div x-show="rec.target.is_hidden" style="color:var(--danger);font-size:.75rem;margin-top:4px">⚠ 该内容当前已被隐藏</div>
+                      <div x-show="rec.target.is_banned" style="color:var(--danger);font-size:.75rem;margin-top:4px">⛔ 该作者已被封禁</div>
+                    </div>
+                  </template>
+                  <div x-show="!rec.target" style="color:var(--sage)">目标内容已不存在</div>
+                  <div x-show="rec.report_note" style="color:var(--sage);margin-top:4px" x-text="'补充说明: '+rec.report_note"></div>
+                  <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap">
+                    <button class="btn btn-outline btn-sm" @click="resolveMod(rec,'ignore',false)" :disabled="modQueueLoading">✅ 忽略</button>
+                    <button class="btn btn-outline btn-sm" @click="resolveMod(rec,'hide',false)" :disabled="modQueueLoading">🙈 隐藏</button>
+                    <button style="background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7" class="btn btn-outline btn-sm" @click="resolveMod(rec,'delete',false)" :disabled="modQueueLoading">🗑 删除</button>
+                    <button style="background:#ffebee;color:#c62828;border:1px solid #ef9a9a" class="btn btn-outline btn-sm" @click="resolveMod(rec,'delete',true)" :disabled="modQueueLoading">🗑 删除+封禁</button>
+                    <button style="background:#fff3e0;color:#e65100;border:1px solid #ffcc80" class="btn btn-outline btn-sm" @click="resolveMod(rec,'hide',true)" :disabled="modQueueLoading">🙈 隐藏+封禁</button>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </template>
+      </div>
+
       <!-- Skeleton loading -->
       <div x-show="loading.forum" style="padding:0">
         <div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div><div class="skeleton skeleton-card"></div>
@@ -612,8 +676,15 @@
                   <span class="feed-author" x-text="p.author_name"></span>
                   <span class="feed-cat" x-text="p.category_name"></span>
                   <span class="feed-time" x-text="formatTime(p.created_at)"></span>
+                  <span x-show="p.is_hidden" style="font-size:.68rem;color:var(--danger);background:#fdecec;padding:1px 5px;border-radius:4px">已隐藏</span>
                 </div>
-                <div class="feed-content md-content" @click="forumToggleComments(p)" style="cursor:pointer" x-html="md(p.content)"></div>
+                <div style="display:flex;align-items:flex-start;gap:10px">
+                  <div class="feed-content md-content" @click="forumToggleComments(p)" style="flex:1;cursor:pointer;min-width:0" x-html="md(p.content)"></div>
+                  <button class="feed-reply-btn" :class="{liked: p.liked}" @click.stop="forumToggleLikePost(p)" x-show="user" style="border:none;background:none;cursor:pointer;color:var(--text-secondary);font-size:.85rem;display:inline-flex;align-items:center;gap:4px;margin-top:2px;flex-shrink:0" title="点赞">
+                    <svg viewBox="0 0 24 24" width="18" height="18" :style="p.liked ? 'fill:var(--amber);stroke:var(--amber)' : 'fill:var(--heart-empty);stroke:var(--text-muted)'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                    <span x-text="p.like_count||0"></span>
+                  </button>
+                </div>
                 <div class="feed-images" x-show="p.images?.length">
                   <template x-for="(img,i) in forumVisibleImages(p.images, p.id)" :key="p.id + '-img-' + i">
                     <img :src="img" class="feed-img" @click.stop="forumOpenLightbox(img)" loading="lazy">
@@ -633,10 +704,15 @@
                             <div class="feed-header">
                               <span class="feed-author" style="font-size:.8rem" x-text="r.author_name"></span>
                               <span class="feed-time" x-text="formatTime(r.created_at)"></span>
-                              <div style="margin-left:auto;display:flex;gap:4px;align-items:center">
-                                <button class="feed-del-btn" @click.stop="forumToggleLike(r)" x-show="user" style="font-size:.7rem" :style="r.liked ? 'color:var(--amber);font-weight:600' : ''">👍 <span x-text="r.like_count||0"></span></button>
-                                <button class="feed-del-btn" @click.stop="openReplyTo(r)" x-show="user" style="font-size:.7rem">↩</button>
-                                <button class="feed-del-btn" @click.stop="forumDeleteReply(r.id, p.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" style="font-size:.7rem">🗑</button>
+                              <div style="margin-left:auto;display:flex;gap:2px;align-items:center;flex-shrink:0">
+                                <span x-show="r.is_hidden" style="font-size:.68rem;color:var(--danger);background:#fdecec;padding:1px 5px;border-radius:4px">已隐藏</span>
+                                <button class="comment-action" :class="{liked: r.liked}" @click.stop="forumToggleLike(r)" x-show="user" title="点赞" style="font-size:.88rem">
+                                  <svg viewBox="0 0 24 24" width="19" height="19" :style="r.liked ? 'fill:var(--amber);stroke:var(--amber)' : 'fill:var(--heart-empty);stroke:var(--text-muted)'" stroke-width="1.5" stroke-linejoin="round" stroke-linecap="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                                  <span x-text="r.like_count||0"></span>
+                                </button>
+                                <button class="comment-action" @click.stop="openReplyTo(r)" x-show="user" title="回复" style="font-size:.88rem">↩</button>
+                                <button class="comment-action" @click.stop="openReport('reply', r.id)" x-show="user" title="举报" style="font-size:.88rem">🚩</button>
+                                <button class="comment-action" @click.stop="forumDeleteReply(r.id, p.id)" x-show="user && (user.id===r.author_id || user.role==='admin')" title="删除" style="font-size:.88rem">🗑</button>
                               </div>
                             </div>
                             <div style="font-size:.8rem" x-show="r.reply_to_name"><span style="color:var(--amber)">回复 @<span x-text="r.reply_to_name"></span>：</span></div>
@@ -675,6 +751,7 @@
                     💬 <span x-text="p.reply_count||0"></span> 条评论 <span x-text="forumCommentOpen[p.id] ? '▲' : '▼'"></span>
                   </button>
                   <button class="feed-reply-btn" @click.stop="openReplyToPost(p.id)" x-show="user" style="border:none;background:none;cursor:pointer;color:var(--amber);font-size:.8rem">↩ 回复</button>
+                  <button class="feed-del-btn" @click.stop="openReport('post', p.id)" x-show="user" style="font-size:.7rem" title="举报">🚩 举报</button>
                   <button class="feed-del-btn" @click.stop="forumTogglePin(p)" x-show="user?.role==='admin'" style="font-size:.7rem" x-text="p.is_pinned ? '📌 已置顶' : '📌 置顶'"></button>
                   <button class="feed-del-btn" @click.stop="forumDeletePost(p.id)" x-show="user && (user.id===p.author_id || user.role==='admin')">🗑</button>
                 </div>
@@ -790,7 +867,8 @@
                 <div style="flex:1"><div style="font-weight:500;font-size:.85rem" x-text="f.title"></div>
                 <div style="font-size:.7rem;color:var(--sage)" x-text="f.created_at?.slice(0,10)"></div></div>
                 <button class="btn btn-outline btn-sm" @click="viewPlan(f)">查看</button>
-                <button class="btn btn-amber btn-sm" @click="downloadPlanPoster(f)">下载</button>
+                <button class="btn btn-amber btn-sm" @click="downloadPlanPoster(f)">HTML</button>
+                <button class="btn btn-amber btn-sm" @click="downloadPlanPosterPdf(f)">PDF</button>
                 <button class="btn btn-ghost btn-sm" style="color:var(--danger)" @click="deleteFav(f.id)" :disabled="inFlight.deleteFav">×</button>
               </div>
             </template>
@@ -823,6 +901,31 @@
 </main>
 
 <!-- ====== AUTH MODAL ====== -->
+<!-- ====== REPORT MODAL（举报弹窗） ====== -->
+<div class="auth-overlay" x-show="reportDialog.open" @click.self="closeReport()" x-transition.opacity>
+  <div class="auth-card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 style="margin:0;font-family:'Playfair Display',serif;font-size:1.2rem;color:var(--text-primary)">🚩 举报内容</h2>
+      <button class="btn btn-ghost btn-sm" @click="closeReport()">✕</button>
+    </div>
+    <div style="font-size:.8rem;color:var(--sage);margin-bottom:12px" x-text="(reportDialog.targetType==='post' ? '举报帖子' : reportDialog.targetType==='reply' ? '举报回复' : '举报头像') + ' #' + reportDialog.targetId"></div>
+    <div class="form-group">
+      <label class="form-label">举报原因</label>
+      <select class="form-select" x-model="reportDialog.reason" style="width:100%">
+        <template x-for="reason in reportReasons" :key="reason"><option :value="reason" x-text="reason"></option></template>
+      </select>
+    </div>
+    <div class="form-group">
+      <label class="form-label">补充说明（可选）</label>
+      <textarea class="form-input" x-model="reportDialog.note" rows="3" maxlength="500" placeholder="描述违规情况，帮助管理员判断..." style="width:100%"></textarea>
+    </div>
+    <div style="display:flex;gap:8px;justify-content:flex-end">
+      <button class="btn btn-outline btn-sm" @click="closeReport()">取消</button>
+      <button class="btn btn-amber btn-sm" @click="submitReport()" :disabled="inFlight.report">提交举报</button>
+    </div>
+  </div>
+</div>
+
 <div class="auth-overlay" x-show="showAuth" @click.self="showAuth=false" x-transition.opacity>
   <div class="auth-card">
     <div class="auth-tabs">
@@ -873,6 +976,14 @@
 <!-- TOAST -->
 <div class="toast" x-show="toastMsg" x-text="toastMsg" x-transition></div>
 
+<!-- 下载状态指示器（右下角，PDF 等下载过程提示） -->
+<div class="download-status" x-show="downloadStatus" x-transition>
+  <span class="download-spinner" x-show="downloadStatus==='generating' || downloadStatus==='downloading'"></span>
+  <span x-show="downloadStatus==='done'" style="font-size:1rem">✅</span>
+  <span x-show="downloadStatus==='error'" style="font-size:1rem">❌</span>
+  <span x-text="downloadMsg" style="margin-left:2px"></span>
+</div>
+
 <!-- Plan View Modal -->
 <div class="auth-overlay" x-show="planViewOpen" @click.self="planViewOpen=false" x-transition.opacity>
   <div class="auth-card" style="width:700px;max-width:95vw;max-height:85vh;overflow-y:auto">
@@ -884,10 +995,10 @@
   </div>
 </div>
 
-<script src="/static/js/api.js?v=5.0"></script>
-<script src="/static/js/app.js?v=5.3"></script>
+<script src="/static/js/api.js?v=5.3"></script>
+<script src="/static/js/app.js?v=7.0"></script>
 <script src="/static/js/hero.js?v=3.3"></script>
 <script src="/static/js/qa-canvas.js?v=3.3"></script>
-<script src="/static/js/splash.js?v=15"></script>
+<script src="/static/js/splash.js?v=17"></script>
 </body>
 </html>

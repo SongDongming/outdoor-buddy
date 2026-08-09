@@ -38,12 +38,21 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="令牌无效",
         )
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="令牌无效")
+    result = await db.execute(select(User).where(User.id == uid))
     user = result.scalar_one_or_none()
     if user is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="用户不存在",
+        )
+    if user.is_banned:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="账号已被封禁",
         )
     return user
 
@@ -61,7 +70,11 @@ async def get_optional_user(
     user_id = payload.get("sub")
     if user_id is None:
         return None
-    result = await db.execute(select(User).where(User.id == int(user_id)))
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+    result = await db.execute(select(User).where(User.id == uid))
     return result.scalar_one_or_none()
 
 
@@ -83,6 +96,10 @@ def rate_limited(limit: int = 10, window: int = 60):
     """
     async def _dep(request: Request) -> None:
         ip = request.client.host if request.client else "unknown"
+        # 反向代理/NAT 后取 X-Forwarded-For 第一个 IP，避免所有用户共享代理 IP 被一起限流
+        xff = request.headers.get("X-Forwarded-For")
+        if xff:
+            ip = xff.split(",")[0].strip() or ip
         key = f"rl:{request.url.path}:{ip}"
         count = await redis_incr(key, window)
         if count is not None and count > limit:

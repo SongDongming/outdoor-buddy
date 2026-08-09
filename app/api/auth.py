@@ -2,12 +2,11 @@
 认证 API 路由 — 注册、登录、邮箱验证、密码重置、头像上传
 """
 from __future__ import annotations
-import base64, uuid
+import uuid
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from openai import AsyncOpenAI
 from app.models.database import get_db
 from app.models.user import User
 from app.schemas.auth import (
@@ -21,7 +20,7 @@ from app.schemas.auth import (
 from app.schemas.common import ApiResponse
 from app.core.security import hash_password, verify_password, create_access_token, generate_token
 from app.core.config import get_settings
-from app.api.dependencies import get_current_user
+from app.api.dependencies import get_current_user, rate_limited
 from app.utils.logger import logger
 from app.services.storage_service import get_storage
 
@@ -46,7 +45,7 @@ def _build_user_response(user: User) -> dict:
 
 
 @router.post("/register", response_model=ApiResponse)
-async def register(req: UserRegisterRequest, db: AsyncSession = Depends(get_db)):
+async def register(req: UserRegisterRequest, db: AsyncSession = Depends(get_db), _rl: None = Depends(rate_limited(5, 300))):
     """用户注册（需要邮箱）"""
     # 检查用户名是否已存在
     result = await db.execute(select(User).where(User.username == req.username))
@@ -76,7 +75,7 @@ async def register(req: UserRegisterRequest, db: AsyncSession = Depends(get_db))
 
 
 @router.post("/login", response_model=ApiResponse)
-async def login(req: UserLoginRequest, db: AsyncSession = Depends(get_db)):
+async def login(req: UserLoginRequest, db: AsyncSession = Depends(get_db), _rl: None = Depends(rate_limited(10, 300))):
     """用户登录 — 支持用户名或邮箱"""
     login_id = req.username.strip().lower()
 
@@ -127,7 +126,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 # ====== 密码重置 ======
 
 @router.post("/forgot-password", response_model=ApiResponse)
-async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends(get_db), _rl: None = Depends(rate_limited(5, 600))):
     """忘记密码 — 发送重置令牌"""
     result = await db.execute(select(User).where(User.email == req.email))
     user = result.scalar_one_or_none()
@@ -143,23 +142,22 @@ async def forgot_password(req: ForgotPasswordRequest, db: AsyncSession = Depends
     db.add(user)
     await db.commit()
 
-    logger.info(f"密码重置令牌已生成: {user.username} <{user.email}>")
+    # 安全：令牌绝不回传给客户端（防止未配置 SMTP 时任意账号接管）。
+    # 仅记录在服务端日志，开发环境可据此手动重置。
+    logger.info(f"密码重置令牌已生成: {user.username} <{user.email}> 令牌: {token}")
 
-    # 尝试发送邮件；如未配置 SMTP，在响应中返回令牌（开发模式）
+    # 尝试发送邮件
     email_sent = await _send_reset_email(user.email, token)
 
     return ApiResponse(
         code=200,
-        message="重置链接已发送到您的邮箱" if email_sent else "邮件服务未配置，请使用下方令牌重置密码",
-        data={
-            "reset_token": token if not email_sent else None,
-            "expires_in_hours": RESET_TOKEN_HOURS,
-        },
+        message="重置链接已发送到您的邮箱" if email_sent else "邮件服务未配置，请联系管理员重置密码",
+        data=None,
     )
 
 
 @router.post("/reset-password", response_model=ApiResponse)
-async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db)):
+async def reset_password(req: ResetPasswordRequest, db: AsyncSession = Depends(get_db), _rl: None = Depends(rate_limited(5, 600))):
     """使用重置令牌设置新密码"""
     result = await db.execute(
         select(User).where(
@@ -281,9 +279,14 @@ def _send_smtp(msg: MIMEMultipart, to_email: str) -> None:
             server.sendmail(settings.smtp_from, to_email, msg.as_string())
 
 
-# ====== 头像上传 + AI审核 ======
+# ====== 头像上传 + 本地 NSFW 审核 ======
+# 说明：原 AI 视觉审核走 DeepSeek（纯文本模型不支持图片），实际每次都降级失效。
+# 改为本地 open_nsfw (onnxruntime) 模型检测色情类内容；暴力/政治图片靠举报 + 管理员人工兜底。
 
-MODERATION_PROMPT = """你是内容安全审核专家。请审核这张图片是否适合作为用户头像。违规判定：1.色情低俗裸露 2.暴力血腥恐怖 3.政治敏感 4.违法广告赌博毒品 5.侮辱歧视。请仅回复JSON：{"passed": true/false, "reason": "审核简述（15字以内）", "score": 1-10}"""
+HEADER_MAGIC = {
+    "jpg": b"\xff\xd8\xff", "jpeg": b"\xff\xd8\xff", "png": b"\x89PNG",
+    "gif": b"GIF8", "webp": b"RIFF",
+}
 
 
 @router.post("/avatar", response_model=ApiResponse)
@@ -292,7 +295,9 @@ async def upload_avatar(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """上传头像并进行AI内容审核"""
+    """上传头像并进行内容审核（本地 NSFW 模型，未登录 401 / 被封禁 403）"""
+    if current_user.is_banned:
+        raise HTTPException(status_code=403, detail="账号已被封禁，无法修改头像")
     if file.size and file.size > 3 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="图片大小不能超过3MB")
     ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename else "jpg"
@@ -300,42 +305,36 @@ async def upload_avatar(
         raise HTTPException(status_code=400, detail="仅支持 jpg/png/gif/webp 格式")
 
     content = await file.read()
-    img_b64 = base64.b64encode(content).decode("utf-8")
-    mime = f"image/{'jpeg' if ext == 'jpg' else ext}"
 
-    try:
-        client = AsyncOpenAI(api_key=settings.compatible_api_key, base_url=settings.compatible_base_url)
-        response = await client.chat.completions.create(
-            model=settings.compatible_model,
-            messages=[{"role": "user", "content": [
-                {"type": "text", "text": MODERATION_PROMPT},
-                {"type": "image_url", "image_url": {"url": f"data:{mime};base64,{img_b64}"}},
-            ]}],
-            max_tokens=150, temperature=0,
-        )
-        result_text = response.choices[0].message.content.strip()
-        logger.info(f"头像审核: {result_text[:200]}")
-    except Exception as e:
-        logger.warning(f"AI审核失败，降级基础审核: {e}")
-        return await _basic_avatar_check(content, ext, current_user, db)
-
-    import json as _json
-    try:
-        s = result_text.find("{"); e = result_text.rfind("}") + 1
-        result = _json.loads(result_text[s:e]) if s >= 0 and e > s else {"passed": True, "reason": "OK", "score": 8}
-    except Exception:
-        result = {"passed": True, "reason": "OK", "score": 8}
-
-    if not result.get("passed"):
-        return ApiResponse(code=422, message=f"审核未通过: {result.get('reason','违规')}", data={"passed": False, "reason": result.get("reason"), "score": result.get("score", 0)})
-
-    return await _save_avatar(content, ext, current_user, db)
-
-
-async def _basic_avatar_check(content: bytes, ext: str, current_user: User, db: AsyncSession):
-    headers = {"jpg": b"\xff\xd8\xff", "jpeg": b"\xff\xd8\xff", "png": b"\x89PNG", "gif": b"GIF8", "webp": b"RIFF"}
-    if headers.get(ext) and not content.startswith(headers[ext]):
+    # 格式魔数校验（文件头）
+    magic = HEADER_MAGIC.get(ext)
+    if magic and not content.startswith(magic):
         raise HTTPException(status_code=400, detail="图片格式校验失败")
+
+    # 本地 NSFW 审核（onnx 推理放线程池，避免阻塞事件循环）
+    import asyncio
+    from app.services.moderation_service import check_image
+    result = await asyncio.to_thread(check_image, content)
+    if result.action == "reject":
+        logger.info(f"[审核] 头像被拦截 (nsfw={result.score:.3f})")
+        return ApiResponse(
+            code=422, message=f"审核未通过: {result.reason}",
+            data={"passed": False, "reason": result.reason, "score": result.score},
+        )
+    if result.action == "flagged":
+        # 边界图片：头像暂可用，但写入管理员复核队列
+        try:
+            from app.models.moderation import ModerationRecord
+            db.add(ModerationRecord(
+                target_type="avatar", target_id=current_user.id,
+                report_reason="nsfw_flagged", source="nsfw",
+                ai_score=result.score, ai_reason=result.reason, status="pending",
+            ))
+            await db.commit()
+            logger.info(f"[审核] 头像标记复核 (nsfw={result.score:.3f})")
+        except Exception as e:
+            logger.warning(f"[审核] 头像复核记录写入失败: {e}")
+
     return await _save_avatar(content, ext, current_user, db)
 
 

@@ -4,7 +4,11 @@
  */
 
 // ====== Markdown 渲染器（逐行解析版） ======
-function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function escHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// 去掉 emoji（PDF 版用：weasyprint 无法渲染彩色 emoji，去除避免空白方块）
+function stripEmoji(s) {
+  return String(s||'').replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{FE0F}\u{200D}\u{2190}-\u{21FF}\u{2300}-\u{23FF}]/gu, '');
+}
 function renderMarkdown(text) {
   if (!text) return '';
   const lines = text.split('\n');
@@ -29,16 +33,20 @@ function renderMarkdown(text) {
     const line = lines[i];
     const trimmed = line.trim();
 
-    // Table row
+    // Table row（单元格文本转义）
     if (/^\|.+\|$/.test(trimmed)) {
       flushPara(); closeList();
       if (!inTable) { inTable = true; tableHtml = '<table class="md-table">'; }
       const cells = trimmed.split('|').filter(c => c.trim());
       const nextLine = lines[i + 1]?.trim() || '';
       const isSep = /^\|[-| :]+\|$/.test(nextLine);
-      const tag = isSep ? 'th' : 'td';
-      tableHtml += '<tr>' + cells.map(c => `<${tag}>${c.trim()}</${tag}>`).join('') + '</tr>';
-      if (isSep) { tableHtml += '<thead><tr>' + cells.map(c => `<th>${c.trim()}</th>`).join('') + '</tr></thead><tbody>'; i++; }
+      if (isSep) {
+        // 当前行是表头（下一行是分隔线）→ 只放进 thead，不重复输出
+        tableHtml += '<thead><tr>' + cells.map(c => `<th>${escHtml(c.trim())}</th>`).join('') + '</tr></thead><tbody>';
+        i++; // 跳过分隔线
+      } else {
+        tableHtml += '<tr>' + cells.map(c => `<td>${escHtml(c.trim())}</td>`).join('') + '</tr>';
+      }
       const afterNext = lines[i + 1]?.trim() || '';
       if (!/^\|.+\|$/.test(afterNext)) {
         if (tableHtml.includes('<tbody>')) tableHtml += '</tbody>';
@@ -50,26 +58,27 @@ function renderMarkdown(text) {
       continue;
     }
 
-    // Headings
-    if (/^### (.+)$/.test(line)) { flushPara(); closeList(); html += line.replace(/^### (.+)$/, '<h4 class="md-h4">$1</h4>'); continue; }
-    if (/^## (.+)$/.test(line))  { flushPara(); closeList(); html += line.replace(/^## (.+)$/, '<h3 class="md-h3">$1</h3>'); continue; }
-    if (/^# (.+)$/.test(line))   { flushPara(); closeList(); html += line.replace(/^# (.+)$/, '<h2 class="md-h2">$1</h2>'); continue; }
+    // Headings（文本转义）
+    let m;
+    if ((m = line.match(/^### (.+)$/))) { flushPara(); closeList(); html += '<h4 class="md-h4">' + escHtml(m[1]) + '</h4>'; continue; }
+    if ((m = line.match(/^## (.+)$/)))  { flushPara(); closeList(); html += '<h3 class="md-h3">' + escHtml(m[1]) + '</h3>'; continue; }
+    if ((m = line.match(/^# (.+)$/)))   { flushPara(); closeList(); html += '<h2 class="md-h2">' + escHtml(m[1]) + '</h2>'; continue; }
 
     // Horizontal rule
     if (/^---$/.test(trimmed)) { flushPara(); closeList(); html += '<hr class="md-hr">'; continue; }
 
-    // Unordered list
-    if (/^- (.+)$/.test(line)) {
+    // Unordered list（文本转义）
+    if ((m = line.match(/^- (.+)$/))) {
       flushPara();
       if (!inList || listTag !== 'ul') { closeList(); html += '<ul class="md-ul">'; inList = true; listTag = 'ul'; }
-      html += '<li>' + line.replace(/^- (.+)$/, '$1') + '</li>';
+      html += '<li>' + escHtml(m[1]) + '</li>';
       continue;
     }
-    // Ordered list
-    if (/^\d+\. (.+)$/.test(line)) {
+    // Ordered list（文本转义）
+    if ((m = line.match(/^\d+\. (.+)$/))) {
       flushPara();
       if (!inList || listTag !== 'ol') { closeList(); html += '<ol class="md-ol">'; inList = true; listTag = 'ol'; }
-      html += '<li>' + line.replace(/^\d+\. (.+)$/, '$1') + '</li>';
+      html += '<li>' + escHtml(m[1]) + '</li>';
       continue;
     }
 
@@ -79,8 +88,8 @@ function renderMarkdown(text) {
     // Empty line = paragraph break
     if (trimmed === '') { flushPara(); continue; }
 
-    // Regular text
-    paraBuf.push(line);
+    // Regular text（转义后存入段落缓冲）
+    paraBuf.push(escHtml(line));
   }
 
   flushPara();
@@ -138,7 +147,7 @@ document.addEventListener('alpine:init', () => {
       queryWeather: false, planQueryWeather: false, planGenerate: false, sendQA: false, planQueryTicket: false,
       doLogin: false, doRegister: false, forumCreate: false,
       forumQuickReply: false, forumSubmitReply: false,
-      addFavorite: false, deleteFav: false,
+      addFavorite: false, deleteFav: false, report: false,
     },
     toastMsg: '',
     _toastTimer: null,  // Phase 1.4: track timeout for race fix
@@ -189,11 +198,28 @@ document.addEventListener('alpine:init', () => {
     forumCategoryMgrOpen: false,        // 分类管理面板开关
     forumNewCategory: { name: '', slug: '', description: '' },
 
+    // === 内容审核 ===
+    reportDialog: { open: false, targetType: 'post', targetId: null, reason: '色情低俗', note: '' },
+    reportReasons: ['色情低俗', '人身攻击', '广告垃圾', '政治敏感', '其他'],
+    modQueue: [], modQueueTotal: 0, modQueueLoading: false, modQueueOpen: false,
+    modQueueFilter: { status: 'pending', type: '' },
+    modExpand: {},                       // 审核记录 id → 是否展开详情
+
     // Avatar
     avatarUploading: false, avatarMsg: '', avatarPassed: true,
 
+    // 下载状态（右下角指示器）
+    downloadStatus: '', downloadMsg: '',
+    _downloadTimer: null,
+
     // === Init ===
     async init() {
+      // 全局 401：token 失效/过期时清登录态并提示
+      window.addEventListener('app:unauthorized', () => {
+        this.user = null;
+        this.toast('登录已过期，请重新登录');
+        this.showAuth = true;
+      });
       if (isLoggedIn()) await this.loadUser();
       this.history = loadHistory();
       // Check URL for reset token
@@ -479,11 +505,9 @@ document.addEventListener('alpine:init', () => {
       finally { this.loading.plan = false; }
     },
     planSelectRoute(i) {
-      console.log('planSelectRoute called, i=' + i);
       if (i < 0 || !this.planSearchResults?.[i]) return;
       this.planSelectedRouteIdx = i;
       this.planSelectedRoute = this.planSearchResults[i];
-      console.log('planSelectedRoute set to:', this.planSelectedRoute?.name);
       const r = this.planSelectedRoute;
       // Phase 4.5: wrap in String() to handle numeric API fields
       const elevStr = String(r.elevation_gain ?? '');
@@ -653,6 +677,7 @@ document.addEventListener('alpine:init', () => {
     historyIcon(t) { return t === 'route' ? '◎' : t === 'equipment' ? '⬡' : t === 'ticket' ? '≡' : t === 'weather' ? '◐' : t === 'plan' ? '▦' : '◈'; },
     historyLabel(t) { return t === 'route' ? '路线' : t === 'equipment' ? '装备' : t === 'ticket' ? '票务' : t === 'weather' ? '天气' : t === 'plan' ? '预案' : '问答'; },
     formatTime(t) { if (!t) return ''; const d = new Date(t); return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; },
+    modTime(ts) { return this.formatTime(ts); },  // 审核队列时间展示
 
     // === Plan View / Download ===
     viewPlan(f) {
@@ -674,11 +699,24 @@ document.addEventListener('alpine:init', () => {
       const title = `${this.equipMode === 'heavy' ? '重装' : '轻装'}徒步装备方案`;
       this._doDownload(title, this.equipResults);
     },
+    downloadPlanPdf() {
+      if (!this.planResults) return;
+      this._doDownload(this.planSearchKw || '行程预案', this.planResults, 'pdf');
+    },
+    downloadEquipPdf() {
+      if (!this.equipResults) return;
+      const title = `${this.equipMode === 'heavy' ? '重装' : '轻装'}徒步装备方案`;
+      this._doDownload(title, this.equipResults, 'pdf');
+    },
     downloadPlanPoster(f) {
       if (!f || !f.title) return this.toast('数据不完整，无法下载');  // Phase 4.6
       this._doDownload(f.title, f.content || {});
     },
-    _doDownload(title, content) {
+    downloadPlanPosterPdf(f) {
+      if (!f || !f.title) return this.toast('数据不完整，无法下载');
+      this._doDownload(f.title, f.content || {}, 'pdf');
+    },
+    _doDownload(title, content, format = 'html') {
       let sections = [];
       if (content.equipment_list) {
         sections = [
@@ -694,33 +732,93 @@ document.addEventListener('alpine:init', () => {
           { emoji: '📅', title: '每日行动指南', text: content.daily_guide },
         ].filter(s => s.text);
       }
+      if (!sections.length) return this.toast('没有可导出的内容');
+      // title 可能来自用户输入：HTML 转义防 XSS，文件名清洗非法字符
+      const safeTitle = escHtml(title);
+      const fileName = String(title || 'export').replace(/[\\/:*?"<>|\s]+/g, '-').replace(/^-+|-+$/g, '') || 'export';
+
+      const posterStyle = `<style>
+  #pdf-root *{margin:0;padding:0;box-sizing:border-box}
+  #pdf-root{font-family:'Inter',sans-serif;background:#f5f0eb;color:#2c2420;line-height:1.8;max-width:800px;margin:0 auto;padding:40px 20px}
+  #pdf-root .poster-header{background:linear-gradient(135deg,#1a3a2a,#0d1f16);color:#fff;padding:40px;border-radius:16px;margin-bottom:24px;text-align:center}
+  #pdf-root .poster-header h1{font-family:'DM Serif Display',serif;font-size:2rem;margin-bottom:8px}
+  #pdf-root .poster-header .subtitle{color:#8ba888;font-size:.9rem}
+  #pdf-root .poster-section{background:#faf7f2;border-radius:12px;padding:24px;margin-bottom:16px;border-left:4px solid #c77d20}
+  #pdf-root .poster-section h2{font-family:'DM Serif Display',serif;font-size:1.2rem;color:#1a3a2a;margin-bottom:12px}
+  #pdf-root .poster-section .content{font-size:.9rem;line-height:1.8}
+  #pdf-root .poster-section .content p{margin:0 0 .6em}
+  #pdf-root .poster-section .content ul,#pdf-root .poster-section .content ol{padding-left:1.4em;margin:0 0 .6em}
+  #pdf-root .poster-section .content h1,#pdf-root .poster-section .content h2,#pdf-root .poster-section .content h3{margin:.8em 0 .4em;color:#1a3a2a}
+  #pdf-root .poster-section .content strong{color:#1a3a2a}
+  #pdf-root .poster-section .content table{border-collapse:collapse;width:100%;margin:0 0 .8em;font-size:.85rem}
+  #pdf-root .poster-section .content th,#pdf-root .poster-section .content td{border:1px solid #d8cfc2;padding:6px 10px;text-align:left;vertical-align:top}
+  #pdf-root .poster-section .content th{background:#eef0e9;font-weight:600}
+  #pdf-root .poster-footer{text-align:center;margin-top:32px;padding:20px;color:#8ba888;font-size:.8rem;border-top:1px solid #e8ddd0}
+</style>`;
+      const posterBody = `<div class="poster-header"><h1>${safeTitle}</h1><div class="subtitle">Outdoor Buddy · 户外徒步助手 · ${new Date().toLocaleDateString('zh-CN')}</div></div>
+${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><div class="content">${this.md(s.text)}</div></div>`).join('')}
+<div class="poster-footer">Generated by Outdoor Buddy · LangGraph Powered</div>`;
+
+      if (format === 'pdf') {
+        this._downloadAsPdf(fileName, posterStyle, posterBody);
+        return;
+      }
 
       const html = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
-<title>${title}</title>
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=Inter:wght@300;400;600&display=swap');
-  *{margin:0;padding:0;box-sizing:border-box}
-  body{font-family:'Inter',sans-serif;background:#f5f0eb;color:#2c2420;line-height:1.8;max-width:800px;margin:0 auto;padding:40px 20px}
-  .poster-header{background:linear-gradient(135deg,#1a3a2a,#0d1f16);color:#fff;padding:40px;border-radius:16px;margin-bottom:24px;text-align:center}
-  .poster-header h1{font-family:'DM Serif Display',serif;font-size:2rem;margin-bottom:8px}
-  .poster-header .subtitle{color:#8ba888;font-size:.9rem}
-  .poster-section{background:#faf7f2;border-radius:12px;padding:24px;margin-bottom:16px;border-left:4px solid #c77d20}
-  .poster-section h2{font-family:'DM Serif Display',serif;font-size:1.2rem;color:#1a3a2a;margin-bottom:12px}
-  .poster-section .content{font-size:.9rem;white-space:pre-wrap;line-height:1.8}
-  .poster-footer{text-align:center;margin-top:32px;padding:20px;color:#8ba888;font-size:.8rem;border-top:1px solid #e8ddd0}
-  @media print{body{background:#fff}.poster-header{background:#1a3a2a!important;-webkit-print-color-adjust:exact}}
-</style></head><body>
-<div class="poster-header"><h1>${title}</h1><div class="subtitle">Outdoor Buddy · 户外徒步助手 · ${new Date().toLocaleDateString('zh-CN')}</div></div>
-${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><div class="content">${s.text}</div></div>`).join('')}
-<div class="poster-footer">Generated by Outdoor Buddy · LangGraph Powered</div>
+<title>${safeTitle}</title>
+${posterStyle}</head><body style="background:#f5f0eb;margin:0">
+<div id="pdf-root">${posterBody}</div>
 </body></html>`;
-
       const blob = new Blob([html], { type: 'text/html' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = url; a.download = `${title}.html`; a.click();
+      a.href = url; a.download = `${fileName}.html`; a.click();
       URL.revokeObjectURL(url);
       this.toast('海报已下载');
+    },
+    _setDownloadStatus(status, msg) {
+      // 右下角下载状态指示器；完成/失败后短暂停留再自动隐藏
+      this.downloadStatus = status;
+      this.downloadMsg = msg || '';
+      if (this._downloadTimer) clearTimeout(this._downloadTimer);
+      if (status === 'done' || status === 'error') {
+        this._downloadTimer = setTimeout(() => { this.downloadStatus = ''; this.downloadMsg = ''; }, 3500);
+      }
+    },
+    async _downloadAsPdf(title, styleHtml, bodyHtml) {
+      // 后端 weasyprint 把海报 HTML 渲染为 PDF（支持中文，避免 html2canvas 兼容问题）
+      // PDF 版去掉 emoji（weasyprint 无法渲染彩色 emoji），标题/内容保持干净文本
+      const pdfBody = stripEmoji(bodyHtml);
+      const pdfHtml = `<!DOCTYPE html><html lang="zh-CN"><head><meta charset="UTF-8">
+<title>${title}</title>
+${styleHtml.replace('max-width:800px', 'max-width:100%')}
+<style>@page { size: A4; margin: 10mm; }</style>
+</head><body style="background:#f5f0eb;margin:0">
+<div id="pdf-root">${pdfBody}</div>
+</body></html>`;
+      this._setDownloadStatus('generating', '正在生成 PDF，请稍候...');
+      try {
+        const _token = localStorage.getItem('token') || '';
+        const res = await fetch('/api/v1/export/pdf', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', ...(_token ? { 'Authorization': 'Bearer ' + _token } : {}) },
+          body: JSON.stringify({ html: pdfHtml, title }),
+        });
+        if (!res.ok) {
+          this._setDownloadStatus('error', 'PDF 生成失败，请重试');
+          return;
+        }
+        const blob = await res.blob();
+        this._setDownloadStatus('downloading', 'PDF 已生成，开始下载...');
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = `${title}.pdf`; a.click();
+        URL.revokeObjectURL(url);
+        this._setDownloadStatus('done', 'PDF 已下载');
+      } catch (e) {
+        console.error('[PDF]', e);
+        this._setDownloadStatus('error', 'PDF 生成失败，请重试');
+      }
     },
     favTypeLabel(t) { return t === 'route' ? '路线' : t === 'equipment' ? '装备' : '预案'; },
     truncate(s, n) { return s && s.length > n ? s.slice(0, n) + '...' : s || ''; },
@@ -780,7 +878,8 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
       if (this.forumCommentOpen[postId] && this.forumComments[postId]) {
         return this.forumCommentsFlat(postId);
       }
-      return (p.preview_comments || []).map(c => ({ ...c, depth: 0 }));
+      // 注入 post_id，保证预览评论的点赞/回复逻辑能正确定位帖子
+      return (p.preview_comments || []).map(c => ({ ...c, depth: 0, post_id: postId }));
     },
     async forumCreatePost() {
       if (this.inFlight.forumCreate) return;
@@ -975,6 +1074,19 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         });
       } catch(e) { this.toast(e.message); }
     },
+    async forumToggleLikePost(post) {
+      // 点赞 / 取消点赞帖子（主帖操作区底部按钮）
+      if (!this.user) { this.toast('请先登录后点赞'); this.showAuth = true; return; }
+      try {
+        const res = await API.forum.likePost(post.id);
+        const { liked, like_count } = res.data;
+        this.forumPosts = this.forumPosts.map(p => p.id === post.id ? { ...p, liked, like_count } : p);
+        // 若抽屉详情打开且是同一帖，同步更新
+        if (this.routeDrawerData && this.routeDrawerData.id === post.id) {
+          this.routeDrawerData = { ...this.routeDrawerData, liked, like_count };
+        }
+      } catch(e) { this.toast(e.message); }
+    },
 
     // === 论坛管理（admin） ===
     async forumTogglePin(post) {
@@ -1005,6 +1117,69 @@ ${sections.map(s => `<div class="poster-section"><h2>${s.emoji} ${s.title}</h2><
         this.toast('分类已删除');
         await this.forumLoadCategories();
         if (this.forumCatId === cat.id) { this.forumCatId = null; await this.forumLoadPosts(); }
+      } catch(e) { this.toast(e.message); }
+    },
+
+    // === 内容审核（举报 + 管理员审核中心） ===
+    openReport(type, id) {
+      // 举报帖子/回复
+      if (!this.user) { this.toast('请先登录后再举报'); this.showAuth = true; return; }
+      this.reportDialog = { open: true, targetType: type, targetId: id, reason: '色情低俗', note: '' };
+    },
+    closeReport() { this.reportDialog.open = false; },
+    async submitReport() {
+      if (this.inFlight.report) return;
+      this.inFlight.report = true;
+      try {
+        await API.moderation.report({
+          target_type: this.reportDialog.targetType,
+          target_id: this.reportDialog.targetId,
+          reason: this.reportDialog.reason,
+          note: this.reportDialog.note,
+        });
+        this.toast('举报成功，管理员将尽快处理');
+        this.closeReport();
+      } catch(e) { this.toast(e.message); }
+      finally { this.inFlight.report = false; }
+    },
+    async toggleModQueue() {
+      this.modQueueOpen = !this.modQueueOpen;
+      if (this.modQueueOpen) await this.loadModQueue();
+    },
+    async loadModQueue() {
+      this.modQueueLoading = true;
+      try {
+        const r = await API.moderation.queue(this.modQueueFilter);
+        this.modQueue = r.data?.items || [];
+        this.modQueueTotal = r.data?.total || 0;
+      } catch(e) { this.toast('加载审核队列失败: ' + e.message); }
+      finally { this.modQueueLoading = false; }
+    },
+    modSourceLabel(rec) {
+      if (rec.source === 'report') return '🚩 举报';
+      if (rec.source === 'ai') return '🤖 AI标记';
+      if (rec.source === 'nsfw') return '🛡 NSFW';
+      return rec.source;
+    },
+    modTargetLabel(rec) {
+      return { post: '帖子', reply: '回复', avatar: '头像' }[rec.target_type] || rec.target_type;
+    },
+    modScoreText(rec) {
+      if (rec.ai_score == null) return '';
+      return rec.source === 'nsfw' ? 'NSFW=' + Number(rec.ai_score).toFixed(2) : '违规分=' + rec.ai_score;
+    },
+    toggleModExpand(id) {
+      this.modExpand = { ...this.modExpand, [id]: !this.modExpand[id] };
+    },
+    async resolveMod(rec, action, ban) {
+      const label = { hide: '隐藏', delete: '删除', ignore: '忽略' }[action] || action;
+      if (action === 'delete' && !confirm('确定删除该内容吗？（其图片将一并删除，不可恢复）')) return;
+      if (ban && !confirm('同时封禁该作者账号吗？')) return;
+      try {
+        await API.moderation.resolve(rec.id, action, ban);
+        this.toast(label + '完成');
+        await this.loadModQueue();
+        await this.forumLoadPosts();
       } catch(e) { this.toast(e.message); }
     },
   }));

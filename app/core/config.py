@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     # Redis 配置（不可用时自动降级到 DB/内存缓存）
     redis_url: str = "redis://localhost:6379/0"
 
+    # 内容审核配置
+    nsfw_enabled: bool = True  # 本地 NSFW 图片审核总开关
+    nsfw_reject_threshold: float = 0.8  # 大于等于此分数直接拦截
+    nsfw_review_threshold: float = 0.2  # 大于等于此分数进入人工复核队列
+
     # 超管账号配置
     super_admin_username: str = "admin"
     super_admin_password: str = "admin123"
@@ -52,6 +57,7 @@ class Settings(BaseSettings):
     secret_key: str = "outdoor-buddy-secret-key-change-in-production"
     access_token_expire_minutes: int = 1440
     app_base_url: str = "http://localhost:8001"  # 前端地址，用于邮件中的链接
+    cors_origins: str = "http://localhost:8001"  # 逗号分隔的允许跨域来源
 
     # 邮件服务配置（SMTP，可选）
     smtp_host: str = ""

@@ -124,10 +124,17 @@ class EquipmentAgent(AgentBase):
                 equipment_list += content
                 yield {"type": "token", "content": content}
 
-        # 流完后执行价格评估（一次性 LLM 调用），补齐 meta 字段
+        # 内容流完立即通知前端结束"生成中"加载，避免连接挂起
+        yield {"type": "done"}
+
+        # 价格评估（一次性 LLM 调用）带 30s 超时，失败不阻塞、补齐空 meta
+        import asyncio
         meta = {"mode": mode, "days": days}
         try:
-            resp = await self.llm.ainvoke([HumanMessage(content=self._price_prompt(equipment_list, mode))])
+            resp = await asyncio.wait_for(
+                self.llm.ainvoke([HumanMessage(content=self._price_prompt(equipment_list, mode))]),
+                timeout=30,
+            )
             text = resp.content
             meta["buying_advice"] = text
             meta["price_range"] = "轻装日徒步约 1000-3000 元，重装多日约 3000-8000 元"
