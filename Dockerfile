@@ -9,7 +9,9 @@ FROM python:3.12-slim
 WORKDIR /app
 
 # weasyprint 系统依赖（pango/cairo）+ 中文字体 + emoji 字体（PDF 导出）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用国内 Debian 镜像加速 apt（清华源）
+RUN sed -i 's|deb.debian.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list.d/debian.sources /etc/apt/sources.list 2>/dev/null || true \
+    && apt-get update && apt-get install -y --no-install-recommends \
     libpango-1.0-0 libpangoft2-1.0-0 libpangocairo-1.0-0 \
     libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info \
     fonts-noto-cjk fonts-noto-color-emoji \
