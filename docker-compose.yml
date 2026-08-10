@@ -27,6 +27,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:-change-me-in-production}
       - ACCESS_TOKEN_EXPIRE_MINUTES=1440
       - APP_BASE_URL=${APP_BASE_URL:-http://localhost:8001}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:8001}
       # 超管账号（必须显式传入，否则容器回退到代码默认 admin/admin123）
       - SUPER_ADMIN_USERNAME=${SUPER_ADMIN_USERNAME:-admin}
       - SUPER_ADMIN_PASSWORD=${SUPER_ADMIN_PASSWORD:-admin123}
