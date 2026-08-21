@@ -5,6 +5,8 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 from datetime import datetime
 
+from app.core.config import get_settings
+
 
 class ForumCategoryOut(BaseModel):
     id: int
@@ -83,14 +85,21 @@ class ForumPostListOut(BaseModel):
 
 
 def _validate_image_urls(v: List[str]) -> List[str]:
-    """图片 URL 白名单：仅接受本站上传路径 /static/img/uploads/，防外链/SSRF"""
+    """图片 URL 白名单：仅接受本站存储路径（本地 /static/img/ 或 MinIO 外部地址），防外链/SSRF"""
     if not v:
         return v
     if len(v) > 9:
         raise ValueError("图片数量不能超过9张")
+    settings = get_settings()
+    # 本站图片的合法前缀：本地存储 /static/img/，或 MinIO 外部地址（如 https://outdoorbuddy.top/oss/）
+    allowed_prefixes = ["/static/img/"]
+    if settings.storage_backend == "minio" and settings.minio_external_url:
+        allowed_prefixes.append(settings.minio_external_url.rstrip("/") + "/")
     clean = []
     for url in v:
-        if not isinstance(url, str) or not url.startswith("/static/img/"):
+        if not isinstance(url, str):
+            raise ValueError("仅支持本站上传的图片")
+        if not any(url.startswith(p) for p in allowed_prefixes):
             raise ValueError("仅支持本站上传的图片")
         if ".." in url.split("/"):
             raise ValueError("非法的图片路径")
