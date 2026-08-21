@@ -14,8 +14,19 @@
   function resize() {
     const area = document.querySelector('.qa-page');
     if (!area) return;
-    width = canvas.width = area.offsetWidth;
-    height = canvas.height = area.offsetHeight;
+    // 尺寸没变就跳过：聊天滚动、输入框聚焦等引起的重排会反复触发 ResizeObserver，
+    // 若每次都重建粒子，背景会「跳变/放大」。只有真正改变尺寸才重设。
+    const newWidth = area.offsetWidth;
+    const newHeight = area.offsetHeight;
+    if (newWidth === width && newHeight === height) return;
+    width = newWidth;
+    height = newHeight;
+    // 适配高分屏（Windows 显示缩放 / Retina）：按 devicePixelRatio 放大像素缓冲，
+    // 否则浏览器会把低分辨率缓冲拉伸填满画布，导致背景发糊、视觉上被「放大」。
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(width * dpr);
+    canvas.height = Math.round(height * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     initParticles();
   }
 

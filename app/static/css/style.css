@@ -851,8 +851,8 @@ select:focus-visible, textarea:focus-visible {
 /* ============================================================
    Chat / QA
    ============================================================ */
-.qa-page { position: relative; display: flex; flex-direction: column; height: calc(100vh); overflow: hidden; }
-.qa-canvas { position: absolute; inset: 0; z-index: 0; opacity: 0.40; pointer-events: none; }
+.qa-page { position: relative; display: flex; flex-direction: column; flex: none; height: calc(100vh); max-height: 100vh; overflow: hidden; }
+.qa-canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; opacity: 0.40; pointer-events: none; }
 .chat-area { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .chat-messages {
   flex: 1;
