@@ -1,9 +1,16 @@
 """
-天气查询 Agent
-LangGraph 图: 获取真实天气 → 评估风险 → 生成建议
-数据源: Open-Meteo (主) → wttr.in (备) — 均为免费真实数据
+天气查询 Agent —— 获取真实 7 天天气预报，并评估徒步可行性 + 给出装备调整建议。
+
+图结构（两节点线性）：
+    fetch_weather ──> assess_risk ──> END
+
+数据源（注意：天气不是 LLM 编的，而是抓的真实数据）：
+1. Open-Meteo（主）—— 全球覆盖、结构化 JSON、免费无需 Key
+2. wttr.in（备）     —— 全球覆盖、免费、可直接按地名查询
+两个源都失败才报错，这是典型的「多源降级」设计。
+
+工作流程：先把地名解析成经纬度 → 抓天气数据 → 再让 LLM 基于数据做风险评估。
 """
-import datetime
 import json as _json
 from typing import TypedDict, Optional
 from langgraph.graph import StateGraph, END
@@ -24,7 +31,9 @@ class WeatherState(TypedDict, total=False):
     error: Optional[str]
 
 
-# 常用中国地名 → 经纬度 (优先快速匹配，减少 LLM 调用)
+# 常用中国地名 → 经纬度 的「本地坐标表」。
+# 作用：优先用这张表 O(1) 查到坐标，只有查不到才回退到 LLM 解析经纬度，
+#       从而省下大量 LLM 调用（LLM 又慢又花钱）。
 LOCATION_COORDS = {
     # 山脉 / 徒步目的地
     "武功山": (27.47, 114.17), "黄山": (30.13, 118.17), "泰山": (36.25, 117.10),
@@ -64,9 +73,11 @@ class WeatherAgent(AgentBase):
 
     def __init__(self):
         super().__init__(name="WeatherAgent", temperature=0.5)
+        # 风险评估专用 LLM：较低温度让评估结论更稳定、不夸大
         self.assess_llm = create_llm(temperature=0.4, max_tokens=2048)
 
     def build_graph(self):
+        """构建两节点线性图：抓数据 → 评估风险。"""
         workflow = StateGraph(WeatherState)
         workflow.add_node("fetch_weather", self._fetch_node)
         workflow.add_node("assess_risk", self._assess_node)
@@ -76,6 +87,7 @@ class WeatherAgent(AgentBase):
         self.graph = workflow
 
     async def _fetch_node(self, state: WeatherState) -> dict:
+        """取数节点：调用真实天气源抓数据。天数上限 7（两个免费源都只稳定提供 7 天）。"""
         location = state.get("location", "")
         forecast_days = min(state.get("forecast_days", 7), 7)
         forecast = await self._fetch_weather(location, forecast_days)
@@ -88,6 +100,9 @@ class WeatherAgent(AgentBase):
         双源策略获取真实天气:
         1. Open-Meteo (主) — 全球覆盖，结构化数据，无需 Key
         2. wttr.in (备) — 全球覆盖，无需 Key，直接按地名查询
+
+        降级链：主源失败（超时/异常/空数据）→ 自动试备源 → 都失败才抛错。
+        每个 _try_* 内部都 try/except 吞掉异常并返回 None，所以单源挂掉不影响整体。
         """
         # --- 源 1: Open-Meteo ---
         forecast = await self._try_open_meteo(location, days)
@@ -265,7 +280,12 @@ class WeatherAgent(AgentBase):
     # ==================== 地理位置解析 ====================
 
     def _resolve_coords(self, location: str) -> tuple | None:
-        """精确/模糊匹配内置坐标库"""
+        """
+        从本地坐标表解析经纬度，两级匹配：
+        1. 精确匹配（location 正好是表里的键）
+        2. 模糊匹配（比如用户输入「武功山徒步」能匹配到「武功山」）
+        都匹配不到返回 None，由调用方回退到 LLM 解析。
+        """
         if location in LOCATION_COORDS:
             return LOCATION_COORDS[location]
         for name, c in LOCATION_COORDS.items():
@@ -274,7 +294,10 @@ class WeatherAgent(AgentBase):
         return None
 
     async def _geocode_by_llm(self, location: str) -> tuple | None:
-        """用大模型推断任意地名的经纬度"""
+        """
+        用大模型推断任意地名的经纬度（坐标表查不到时的兜底方案）。
+        要求 LLM 只输出 JSON，并做合法性校验（纬度 -90~90、经度 -180~180），防模型瞎编。
+        """
         try:
             prompt = (
                 f'请返回「{location}」的经纬度坐标，仅输出 JSON: '
@@ -312,6 +335,10 @@ class WeatherAgent(AgentBase):
     # ==================== 风险评估 ====================
 
     async def _assess_node(self, state: WeatherState) -> dict:
+        """
+        评估节点：把真实天气数据喂给 LLM，让它生成「徒步可行性评估」和「装备调整建议」。
+        LLM 在这里的角色是「解读数据」而非「捏造数据」——这是本 Agent 与纯生成类 Agent 的区别。
+        """
         location = state.get("location", "")
         forecast = state.get("forecast", [])
 
@@ -348,6 +375,7 @@ class WeatherAgent(AgentBase):
         }
 
     async def run(self, location: str, date: str = None, forecast_days: int = 7) -> dict:
+        """对外入口：跑完整张图（抓数据 → 评估），整理成 API 需要的字典。"""
         compiled = self.compile()
         result = await compiled.ainvoke({
             "location": location, "date": date, "forecast_days": forecast_days
@@ -360,10 +388,12 @@ class WeatherAgent(AgentBase):
         }
 
 
+# 全局单例：进程内只创建一次 WeatherAgent
 _weather_agent: Optional[WeatherAgent] = None
 
 
 def get_weather_agent() -> WeatherAgent:
+    """获取 WeatherAgent 单例"""
     global _weather_agent
     if _weather_agent is None:
         _weather_agent = WeatherAgent()
