@@ -53,3 +53,9 @@ docker_volumes/
 
 # Docker 镜像导出（部署产物）
 *.tar
+
+# SSL 证书（部署产物；.key 是私钥，绝不能提交到仓库）
+*.key
+*.pem
+*.crt
+*.cer

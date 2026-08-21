@@ -3,7 +3,7 @@ services:
     build: .
     container_name: outdoor-buddy-app
     ports:
-      - "${APP_PORT:-8001}:8001"
+      - "127.0.0.1:${APP_PORT:-8001}:8001"
     environment:
       - DB_HOST=db
       - DB_PORT=5432
@@ -72,7 +72,7 @@ services:
     image: drfccv/mcp-server-12306:latest
     container_name: mcp-server-12306
     ports:
-      - "8002:8000"
+      - "127.0.0.1:8002:8000"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-sf", "-X", "POST", "http://localhost:8000/mcp", "-H", "Content-Type: application/json", "-d", '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26","capabilities":{},"clientInfo":{"name":"healthcheck","version":"1.0"}}}']
@@ -102,7 +102,7 @@ services:
     image: redis:7-alpine
     container_name: outdoor-buddy-redis
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
@@ -118,8 +118,8 @@ services:
       - MINIO_ROOT_USER=${MINIO_ACCESS_KEY:-minioadmin}
       - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY:-minioadmin}
     ports:
-      - "${MINIO_API_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+      - "127.0.0.1:${MINIO_API_PORT:-9000}:9000"
+      - "127.0.0.1:${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio_data:/data
     restart: unless-stopped
